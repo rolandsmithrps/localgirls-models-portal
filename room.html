@@ -1,26 +1,175 @@
-<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Model Room</title>
-<style>body{background:#0f0a1f;color:#f8f8ff;font-family:ui-sans-serif}header{background:#4c1d95;padding:10px 14px}.pill{border:1px solid #fff3;border-radius:999px;padding:2px 6px}.wrap{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin:10px}video{width:100%;background:#000;border:1px solid #3a1b73;border-radius:12px}.panel{background:#1e103b;border:1px solid #3a1b73;border-radius:12px;padding:10px;height:70vh;display:flex;flex-direction:column}.debug{font-size:.85rem;color:#cbd5e1;margin-top:6px;white-space:pre-line}.btn{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:#6d28d9;color:#fff;cursor:pointer}</style>
-<script src="https://cdn.ably.com/lib/ably.min-1.js"></script></head><body>
-<header>LOCAL GIRLS — Model Room <span class=pill>v8.3.1</span> <span id=roomName></span></header>
-<div class=wrap><div><video id=remote autoplay playsinline muted></video><div id=debug class=debug></div></div><div class=panel><div style="margin-bottom:8px"><button id=start class=btn>Start Camera & Mic</button></div><video id=local autoplay muted playsinline></video></div></div>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Model Room</title>
+  <style>
+    body{background:#0f0a1f;color:#f8f8ff;font-family:ui-sans-serif}
+    header{background:#4c1d95;padding:10px 14px}
+    .pill{border:1px solid #fff3;border-radius:999px;padding:2px 6px}
+    .wrap{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin:10px}
+    video{width:100%;background:#000;border:1px solid #3a1b73;border-radius:12px}
+    .panel{background:#1e103b;border:1px solid #3a1b73;border-radius:12px;padding:10px;height:70vh;display:flex;flex-direction:column}
+    .debug{font-size:.85rem;color:#cbd5e1;margin-top:6px;white-space:pre-line}
+    .btn{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:#6d28d9;color:#fff;cursor:pointer}
+    .row{display:flex;gap:8px;align-items:center}
+  </style>
+  <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+</head>
+<body>
+<header>
+  LOCAL GIRLS — Model Room <span class="pill">v9.0.0</span>
+  <span id="roomName"></span>
+  <span class="pill" id="presencePill" title="Connected participants">0 online</span>
+</header>
+
+<div class="wrap">
+  <div>
+    <video id="remote" autoplay playsinline></video>
+    <div id="debug" class="debug"></div>
+  </div>
+  <div class="panel">
+    <div class="row" style="margin-bottom:8px">
+      <button id="start" class="btn">Start Camera & Mic</button>
+      <button id="hang" class="btn" style="background:#7c3aed;border-color:#6d28d9">Hang Up</button>
+    </div>
+    <video id="local" autoplay muted playsinline></video>
+  </div>
+</div>
+
 <script>
-const dbgEl=document.getElementById('debug'); const log=m=>{const p=document.createElement('div'); p.textContent=m; dbgEl.appendChild(p)};
-const roomSlug=location.pathname.split('/room/')[1]?.split('?')[0]||'room'; const isHost=new URLSearchParams(location.search).has('host'); document.getElementById('roomName').textContent='Room: '+roomSlug+(isHost?' (host)':'');
-let pc, dc, realtime, chan; let localStream=null; const remoteStream=new MediaStream(); const remoteV=document.getElementById('remote'); remoteV.srcObject=remoteStream;
-async function getIceServers(){ try{ const r=await fetch('/api/ice',{cache:'no-store'}); const j=await r.json(); log('ICE '+JSON.stringify(j.iceServers)); return j.iceServers||[{urls:['stun:stun.l.google.com:19302']}]; }catch(e){ return [{urls:['stun:stun.l.google.com:19302']}]; } }
-async function initPeer(servers){ pc=new RTCPeerConnection({iceServers:servers}); pc.ontrack=e=>{ if(e.track){ remoteStream.addTrack(e.track); remoteV.play().catch(()=>{}); log('ontrack '+e.track.kind); } }; pc.onicecandidate=e=>{ if(e.candidate) chan.publish('ice', e.candidate); }; pc.onnegotiationneeded=async()=>{ try{ if(pc.signalingState!=='stable') return; const offer=await pc.createOffer(); await pc.setLocalDescription(offer); chan.publish('sdp', pc.localDescription); log('offer ->'); }catch(e){ log('neg err '+e.message); } };
-  dc=pc.createDataChannel('chat'); }
-(async()=>{ const ice=await getIceServers(); realtime=new Ably.Realtime.Promise({authUrl:'/api/ably-token'}); await realtime.connection.once('connected'); chan=realtime.channels.get('room:'+roomSlug);
-  chan.subscribe('ice', async c=>{ try{ await pc.addIceCandidate(new RTCIceCandidate(c.data)); log('ice <-'); }catch(e){} }); chan.subscribe('sdp', async s=>{ const d=s.data; if(d.type==='offer'){ log('offer <-'); await pc.setRemoteDescription(d); const ans=await pc.createAnswer(); await pc.setLocalDescription(ans); chan.publish('sdp', pc.localDescription); log('answer ->'); } else if(d.type==='answer'){ log('answer <-'); await pc.setRemoteDescription(d); } }); await initPeer(ice); })();
-document.getElementById('start').onclick = async () => {
+const dbgEl = document.getElementById('debug');
+const log = (m) => { const p=document.createElement('div'); p.textContent = m; dbgEl.appendChild(p) };
+
+const roomSlug = location.pathname.split('/room/')[1]?.split('?')[0] || 'room';
+const isHost = new URLSearchParams(location.search).has('host');
+document.getElementById('roomName').textContent = 'Room: ' + roomSlug + (isHost ? ' (host)' : '');
+
+let pc, dc, realtime, chan;
+let localStream = null;
+const remoteStream = new MediaStream();
+const remoteV = document.getElementById('remote'); remoteV.srcObject = remoteStream;
+
+const presEl = document.getElementById('presencePill');
+function setPresence(n){ presEl.textContent = (n|0) + ' online'; }
+
+async function getIceServers(){
   try{
-    localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-    localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
+    const r = await fetch('/api/ice', { cache:'no-store' });
+    const j = await r.json();
+    log('ICE ' + JSON.stringify(j.iceServers));
+    return j.iceServers || [{ urls:['stun:stun.l.google.com:19302'] }];
+  }catch(e){
+    return [{ urls:['stun:stun.l.google.com:19302'] }];
+  }
+}
+
+async function initPeer(servers){
+  pc = new RTCPeerConnection({ iceServers: servers });
+  pc.ontrack = e => {
+    if (e.track) {
+      remoteStream.addTrack(e.track);
+      remoteV.play().catch(()=>{});
+      log('ontrack ' + e.track.kind);
+    }
+  };
+  pc.onicecandidate = e => {
+    if (e.candidate) chan.publish('ice', e.candidate);
+  };
+  pc.onconnectionstatechange = () => log('pc state: ' + pc.connectionState);
+  dc = pc.createDataChannel('chat');
+}
+
+(async () => {
+  const ice = await getIceServers();
+  // Realtime with token endpoint
+  realtime = new Ably.Realtime.Promise({ authUrl: '/api/ably-token' });
+  await realtime.connection.once('connected');
+  chan = realtime.channels.get('room:' + roomSlug);
+
+  // Presence: enter as soon as we connect
+  try {
+    await chan.presence.enter({ role: isHost ? 'host' : 'guest' });
+  } catch(e) {
+    log('presence enter failed: ' + e.message);
+  }
+
+  // Track presence to update UI
+  chan.presence.subscribe(['enter','leave','update'], async () => {
+    const members = await chan.presence.get();
+    setPresence(members.length);
+  });
+  // Seed initial presence
+  try {
+    const members = await chan.presence.get();
+    setPresence(members.length);
+  } catch {}
+
+  // Messaging for WebRTC
+  chan.subscribe('ice', async c => {
+    try { await pc.addIceCandidate(new RTCIceCandidate(c.data)); log('ice <-'); } catch(e){}
+  });
+  chan.subscribe('sdp', async s => {
+    const d = s.data;
+    if (d.type === 'offer') {
+      log('offer <-');
+      await pc.setRemoteDescription(d);
+      const ans = await pc.createAnswer();
+      await pc.setLocalDescription(ans);
+      chan.publish('sdp', pc.localDescription);
+      log('answer ->');
+    } else if (d.type === 'answer') {
+      log('answer <-');
+      await pc.setRemoteDescription(d);
+    }
+  });
+
+  await initPeer(ice);
+
+  // Heartbeat for member site (optional): ping status endpoint to keep it warm
+  setInterval(() => {
+    fetch('/api/presence?room=' + encodeURIComponent(roomSlug)).catch(()=>{});
+  }, 30000);
+})();
+
+document.getElementById('start').onclick = async () => {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video:{ width:{ ideal:1280 }, height:{ ideal:720 } },
+      audio:{ echoCancellation:true, noiseSuppression:true }
+    });
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
     document.getElementById('local').srcObject = localStream;
-    const offer=await pc.createOffer(); await pc.setLocalDescription(offer); chan.publish('sdp', pc.localDescription); log('initial offer ->');
-  } catch(e){
-    log('media err: '+(e && e.name ? e.name+': ' : '')+(e && e.message ? e.message : e));
+
+    // Proactive initial offer
+    const offer = await pc.createOffer({ offerToReceiveAudio:true, offerToReceiveVideo:true });
+    await pc.setLocalDescription(offer);
+    chan.publish('sdp', pc.localDescription);
+    log('initial offer ->');
+  } catch(e) {
+    log('media err: ' + (e && e.name ? e.name+': ' : '') + (e && e.message ? e.message : e));
     alert('Camera/Mic access failed. Click the camera icon in your address bar and set "Allow", then refresh.');
   }
 };
-</script></body></html>
+
+document.getElementById('hang').onclick = async () => {
+  try {
+    if (localStream) { localStream.getTracks().forEach(t => t.stop()); }
+    if (pc) { pc.getSenders().forEach(s => s.track && s.track.stop()); pc.close(); }
+    pc = null;
+    document.getElementById('local').srcObject = null;
+    if (remoteV.srcObject) {
+      const s = remoteV.srcObject; s.getTracks().forEach(t => t.stop()); remoteV.srcObject = null;
+    }
+    try { await chan.presence.update({ role: isHost ? 'host' : 'guest', state: 'idle' }); } catch {}
+    log('hung up');
+  } catch {}
+};
+
+window.addEventListener('beforeunload', async () => {
+  try { await chan?.presence?.leave(); } catch {}
+});
+</script>
+</body>
+</html>
