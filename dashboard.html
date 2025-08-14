@@ -1,1 +1,92 @@
-<!doctype html><meta charset=utf-8><title>Dashboard</title><a href='/room/taylored2u?host=1'>Go Live</a>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard — Local Girls</title>
+  <style>
+    :root { --bg:#0f0a1f; --card:#17122b; --acc:#6d28d9; --acc2:#a78bfa; --text:#f8f8ff; --muted:#cbd5e1; --ok:#10b981; --bad:#ef4444; }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto}
+    header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:#4c1d95}
+    .wrap{max-width:1100px;margin:28px auto;padding:0 16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+    .tile{background:var(--card);border:1px solid #2a1f49;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+    .tile h3{margin:0;font-size:1.1rem}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:.85rem;border:1px solid #ffffff29}
+    .badge.ok{background:rgba(16,185,129,.15);border-color:rgba(16,185,129,.4)}
+    .badge.bad{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.4)}
+    .btn{appearance:none;border:1px solid #5b21b6;background:var(--acc);color:#fff;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:600;text-align:center;text-decoration:none}
+    .btn.secondary{background:transparent;border-color:#7c3aed;color:#e9d5ff}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .muted{color:var(--muted)}
+    .liveLamp{width:10px;height:10px;border-radius:50%;display:inline-block;background:#555;box-shadow:0 0 0 1px #333 inset}
+    .liveLamp.on{background:var(--ok);box-shadow:0 0 8px 0 var(--ok)}
+    footer{opacity:.7;text-align:center;padding:18px}
+    code{background:#120c24;padding:2px 6px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <header>
+    <div>LOCAL GIRLS — Dashboard</div>
+    <nav><a class="btn secondary" href="/index.html">Home</a></nav>
+  </header>
+
+  <div class="wrap">
+    <div class="grid">
+      <div class="tile" id="tile-t2u">
+        <div class="row" style="justify-content:space-between">
+          <h3>Taylored2U</h3>
+          <span id="badge-t2u" class="badge bad"><span class="liveLamp" id="lamp-t2u"></span><span id="text-t2u">Offline</span></span>
+        </div>
+        <div class="muted" id="meta-t2u">Room: <code>taylored2u</code> • 0 online</div>
+        <div class="row">
+          <a class="btn" href="/room/taylored2u?host=1">Open as Host</a>
+          <a class="btn secondary" href="/room/taylored2u">Open as Guest</a>
+        </div>
+      </div>
+
+      <!-- Example: add more tiles by copy/paste -->
+      <div class="tile" id="tile-demo">
+        <div class="row" style="justify-content:space-between">
+          <h3>Demo Room</h3>
+          <span id="badge-demo" class="badge bad"><span class="liveLamp" id="lamp-demo"></span><span id="text-demo">Offline</span></span>
+        </div>
+        <div class="muted" id="meta-demo">Room: <code>demo</code> • 0 online</div>
+        <div class="row">
+          <a class="btn" href="/room/demo?host=1">Open as Host</a>
+          <a class="btn secondary" href="/room/demo">Open as Guest</a>
+        </div>
+      </div>
+    </div>
+
+    <footer class="muted">Presence powered by <code>/api/presence</code>. Polling every 10s.</footer>
+  </div>
+
+<script>
+async function refreshTile(slug, ids){
+  try{
+    const r = await fetch('/api/presence?room=' + encodeURIComponent(slug), { cache: 'no-store' });
+    const j = await r.json();
+    const on = !!j.online;
+    const badge = document.getElementById(ids.badge);
+    const text = document.getElementById(ids.text);
+    const lamp = document.getElementById(ids.lamp);
+    const meta = document.getElementById(ids.meta);
+    if (on) { badge.classList.remove('bad'); badge.classList.add('ok'); text.textContent='Online'; lamp.classList.add('on'); }
+    else { badge.classList.remove('ok'); badge.classList.add('bad'); text.textContent='Offline'; lamp.classList.remove('on'); }
+    meta.textContent = 'Room: ' + slug + ' • ' + (j.count||0) + ' online';
+  } catch(e){
+    // keep quiet; show as offline
+  }
+}
+
+function tick(){
+  refreshTile('taylored2u', { badge:'badge-t2u', text:'text-t2u', lamp:'lamp-t2u', meta:'meta-t2u' });
+  refreshTile('demo', { badge:'badge-demo', text:'text-demo', lamp:'lamp-demo', meta:'meta-demo' });
+}
+tick();
+setInterval(tick, 10000);
+</script>
+</body>
+</html>

@@ -5,23 +5,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Model Room</title>
   <style>
-    body{background:#0f0a1f;color:#f8f8ff;font-family:ui-sans-serif}
-    header{background:#4c1d95;padding:10px 14px}
-    .pill{border:1px solid #fff3;border-radius:999px;padding:2px 6px}
+    :root { --bg:#0f0a1f; --card:#17122b; --acc:#6d28d9; --text:#f8f8ff; --muted:#cbd5e1; }
+    body{background:var(--bg);color:var(--text);font-family:ui-sans-serif;margin:0}
+    header{background:#4c1d95;padding:10px 14px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+    .pill{border:1px solid #fff3;border-radius:999px;padding:2px 8px}
     .wrap{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin:10px}
     video{width:100%;background:#000;border:1px solid #3a1b73;border-radius:12px}
-    .panel{background:#1e103b;border:1px solid #3a1b73;border-radius:12px;padding:10px;height:70vh;display:flex;flex-direction:column}
-    .debug{font-size:.85rem;color:#cbd5e1;margin-top:6px;white-space:pre-line}
-    .btn{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:#6d28d9;color:#fff;cursor:pointer}
-    .row{display:flex;gap:8px;align-items:center}
+    .panel{background:#1e103b;border:1px solid #3a1b73;border-radius:12px;padding:10px;height:72vh;display:flex;flex-direction:column;gap:10px}
+    .debug{font-size:.85rem;color:var(--muted);margin-top:6px;white-space:pre-line}
+    .btn{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:var(--acc);color:#fff;cursor:pointer}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .toolbar{display:flex;gap:8px;align-items:center}
+    .badge{display:inline-flex;gap:6px;align-items:center;border:1px solid #ffffff29;border-radius:999px;padding:4px 10px}
   </style>
   <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
 </head>
 <body>
 <header>
-  LOCAL GIRLS — Model Room <span class="pill">v9.0.0</span>
-  <span id="roomName"></span>
-  <span class="pill" id="presencePill" title="Connected participants">0 online</span>
+  <div>
+    <strong>LOCAL GIRLS — Model Room</strong>
+    <span class="pill" id="roomName">Room</span>
+    <span class="pill" id="presencePill" title="Connected participants">0 online</span>
+  </div>
+  <div class="toolbar">
+    <button id="btnStart" class="btn">Start Cam & Mic</button>
+    <button id="btnConnect" class="btn">Connect</button>
+    <button id="btnMute" class="btn">Mute</button>
+    <button id="btnCam" class="btn">Camera Off</button>
+    <button id="btnHang" class="btn">Hang Up</button>
+  </div>
 </header>
 
 <div class="wrap">
@@ -30,11 +42,8 @@
     <div id="debug" class="debug"></div>
   </div>
   <div class="panel">
-    <div class="row" style="margin-bottom:8px">
-      <button id="start" class="btn">Start Camera & Mic</button>
-      <button id="hang" class="btn" style="background:#7c3aed;border-color:#6d28d9">Hang Up</button>
-    </div>
     <video id="local" autoplay muted playsinline></video>
+    <div class="badge" id="connState">Peer: disconnected</div>
   </div>
 </div>
 
@@ -52,7 +61,9 @@ const remoteStream = new MediaStream();
 const remoteV = document.getElementById('remote'); remoteV.srcObject = remoteStream;
 
 const presEl = document.getElementById('presencePill');
+const stateEl = document.getElementById('connState');
 function setPresence(n){ presEl.textContent = (n|0) + ' online'; }
+function setState(s){ stateEl.textContent = 'Peer: ' + s; }
 
 async function getIceServers(){
   try{
@@ -77,39 +88,25 @@ async function initPeer(servers){
   pc.onicecandidate = e => {
     if (e.candidate) chan.publish('ice', e.candidate);
   };
-  pc.onconnectionstatechange = () => log('pc state: ' + pc.connectionState);
+  pc.onconnectionstatechange = () => { setState(pc.connectionState); log('pc state: ' + pc.connectionState); };
   dc = pc.createDataChannel('chat');
 }
 
 (async () => {
   const ice = await getIceServers();
-  // Realtime with token endpoint
   realtime = new Ably.Realtime.Promise({ authUrl: '/api/ably-token' });
   await realtime.connection.once('connected');
   chan = realtime.channels.get('room:' + roomSlug);
 
-  // Presence: enter as soon as we connect
-  try {
-    await chan.presence.enter({ role: isHost ? 'host' : 'guest' });
-  } catch(e) {
-    log('presence enter failed: ' + e.message);
-  }
+  try { await chan.presence.enter({ role: isHost ? 'host' : 'guest' }); } catch(e){ log('presence error ' + e.message); }
 
-  // Track presence to update UI
   chan.presence.subscribe(['enter','leave','update'], async () => {
     const members = await chan.presence.get();
     setPresence(members.length);
   });
-  // Seed initial presence
-  try {
-    const members = await chan.presence.get();
-    setPresence(members.length);
-  } catch {}
+  try { const members = await chan.presence.get(); setPresence(members.length); } catch {}
 
-  // Messaging for WebRTC
-  chan.subscribe('ice', async c => {
-    try { await pc.addIceCandidate(new RTCIceCandidate(c.data)); log('ice <-'); } catch(e){}
-  });
+  chan.subscribe('ice', async c => { try { await pc.addIceCandidate(new RTCIceCandidate(c.data)); log('ice <-'); } catch(e){} });
   chan.subscribe('sdp', async s => {
     const d = s.data;
     if (d.type === 'offer') {
@@ -127,49 +124,56 @@ async function initPeer(servers){
 
   await initPeer(ice);
 
-  // Heartbeat for member site (optional): ping status endpoint to keep it warm
-  setInterval(() => {
-    fetch('/api/presence?room=' + encodeURIComponent(roomSlug)).catch(()=>{});
-  }, 30000);
+  // Keep presence warm
+  setInterval(() => { fetch('/api/presence?room=' + encodeURIComponent(roomSlug)).catch(()=>{}); }, 30000);
 })();
 
-document.getElementById('start').onclick = async () => {
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({
-      video:{ width:{ ideal:1280 }, height:{ ideal:720 } },
-      audio:{ echoCancellation:true, noiseSuppression:true }
-    });
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-    document.getElementById('local').srcObject = localStream;
+async function startMedia(){
+  localStream = await navigator.mediaDevices.getUserMedia({
+    video:{ width:{ ideal:1280 }, height:{ ideal:720 } },
+    audio:{ echoCancellation:true, noiseSuppression:true }
+  });
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  document.getElementById('local').srcObject = localStream;
+}
 
-    // Proactive initial offer
-    const offer = await pc.createOffer({ offerToReceiveAudio:true, offerToReceiveVideo:true });
-    await pc.setLocalDescription(offer);
-    chan.publish('sdp', pc.localDescription);
-    log('initial offer ->');
-  } catch(e) {
-    log('media err: ' + (e && e.name ? e.name+': ' : '') + (e && e.message ? e.message : e));
-    alert('Camera/Mic access failed. Click the camera icon in your address bar and set "Allow", then refresh.');
-  }
+async function makeOffer(){
+  const offer = await pc.createOffer({ offerToReceiveAudio:true, offerToReceiveVideo:true });
+  await pc.setLocalDescription(offer);
+  chan.publish('sdp', pc.localDescription);
+  log('offer ->');
+}
+
+document.getElementById('btnStart').onclick = async () => {
+  try{ await startMedia(); } catch(e){ alert('Allow camera/mic and retry'); }
 };
-
-document.getElementById('hang').onclick = async () => {
+document.getElementById('btnConnect').onclick = async () => {
+  try{ await makeOffer(); } catch(e){}
+};
+document.getElementById('btnMute').onclick = () => {
+  if (!localStream) return;
+  const tracks = localStream.getAudioTracks();
+  tracks.forEach(t => t.enabled = !t.enabled);
+  document.getElementById('btnMute').textContent = tracks[0]?.enabled ? 'Mute' : 'Unmute';
+};
+document.getElementById('btnCam').onclick = () => {
+  if (!localStream) return;
+  const tracks = localStream.getVideoTracks();
+  tracks.forEach(t => t.enabled = !t.enabled);
+  document.getElementById('btnCam').textContent = tracks[0]?.enabled ? 'Camera Off' : 'Camera On';
+};
+document.getElementById('btnHang').onclick = async () => {
   try {
-    if (localStream) { localStream.getTracks().forEach(t => t.stop()); }
+    if (localStream) localStream.getTracks().forEach(t => t.stop());
     if (pc) { pc.getSenders().forEach(s => s.track && s.track.stop()); pc.close(); }
     pc = null;
     document.getElementById('local').srcObject = null;
-    if (remoteV.srcObject) {
-      const s = remoteV.srcObject; s.getTracks().forEach(t => t.stop()); remoteV.srcObject = null;
-    }
-    try { await chan.presence.update({ role: isHost ? 'host' : 'guest', state: 'idle' }); } catch {}
-    log('hung up');
+    if (remoteV.srcObject) { const s = remoteV.srcObject; s.getTracks().forEach(t => t.stop()); remoteV.srcObject = null; }
+    try { await chan.presence.update({ state: 'idle' }); } catch {}
   } catch {}
 };
 
-window.addEventListener('beforeunload', async () => {
-  try { await chan?.presence?.leave(); } catch {}
-});
+window.addEventListener('beforeunload', async () => { try { await chan?.presence?.leave(); } catch {} });
 </script>
 </body>
 </html>
