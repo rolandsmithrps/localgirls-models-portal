@@ -1,134 +1,85 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Local Girls — Models Dashboard</title>
-  <link rel="icon" href="data:," />
-  <style>
-    :root { --bg:#0f0a1f; --card:#1e103b; --accent:#a855f7; --text:#f8f8ff; --muted:#cbd5e1; --border:#3a1b73; }
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    header{background:#4c1d95;padding:12px 16px;color:#fff;display:flex;align-items:center;justify-content:space-between}
-    header .badge{font-weight:600;font-size:.85rem;padding:4px 8px;border:1px solid #ffffff33;border-radius:999px;opacity:.9;margin-left:8px}
-    main{max-width:1100px;margin:0 auto;padding:20px}
-    .top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
-    .go{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:#6d28d9;color:#fff;cursor:pointer}
-    .end{padding:10px 14px;border-radius:10px;border:1px solid #7f1d1d;background:#dc2626;color:#fff;cursor:pointer}
-    .panel{background:#1e103b;border:1px solid #3a1b73;border-radius:14px;padding:16px}
-    .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
-    .metric{background:#150a2b;border:1px solid #3a1b73;border-radius:12px;padding:14px}
-    .metric h4{margin:0 0 6px 0;font-weight:700}
-    .muted{color:#cbd5e1}
-    .debug{margin-top:10px;font-size:.9rem;color:#cbd5e1}
-    code{background:#0b0717;padding:2px 6px;border-radius:6px}
-  </style>
-  <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-</head>
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Local Girls — Model Dashboard</title><link rel="icon" href="data:,"/><style>
+:root { --bg:#0f0a1f; --panel:#1e103b; --accent:#a855f7; --text:#f8f8ff; --muted:#cbd5e1; --border:#3a1b73; }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+a{color:#fff;text-decoration:none}
+header{background:#4c1d95;padding:12px 16px;color:#fff;display:flex;align-items:center;justify-content:space-between}
+.brand{font-weight:800;letter-spacing:.5px}
+.badge{font-weight:600;font-size:.85rem;padding:4px 8px;border:1px solid #ffffff33;border-radius:999px;opacity:.9;margin-left:8px}
+.btn{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:#6d28d9;color:#fff;cursor:pointer}
+.container{max-width:1100px;margin:0 auto;padding:18px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px}
+input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#150a2b;color:#fff}
+label{display:block;margin-bottom:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.stat{background:#150a2b;border:1px solid #3a1b73;border-radius:12px;padding:12px}
+</style><script src="https://cdn.ably.com/lib/ably.min-1.js"></script></head>
 <body>
-  <header>
-    <div><b>LOCAL GIRLS — Models</b><span class="badge">v8.1.1</span></div>
-    <div>Status: <span id="status">Offline</span></div>
-  </header>
-  <main>
-    <div class="top">
-      <h2 id="welcome">Welcome</h2>
-      <div style="display:flex;gap:10px">
-        <button id="goLive" class="go">Go Live</button>
-        <button id="endLive" class="end" disabled>End Stream</button>
-      </div>
+<header><div class="brand">LOCAL GIRLS — Models <span class="badge">v8.2</span></div><a class="btn" href="/login.html">Switch</a></header>
+<main class="container">
+  <div class="panel">
+    <h2 id="hello">Welcome</h2>
+    <div style="display:flex;gap:10px;margin:10px 0">
+      <button class="btn" id="goLive">Go Live</button>
+      <button class="btn" id="end" style="display:none">End Stream</button>
     </div>
-
-    <div class="panel">
-      <h3>Your Metrics</h3>
-      <div class="metrics">
-        <div class="metric"><h4>Total Streams this Month</h4><div class="muted">42 unique streams</div></div>
-        <div class="metric"><h4>Total Private Minutes Billed</h4><div class="muted">541 minutes</div></div>
-        <div class="metric"><h4>Total Exclusive Minutes Billed</h4><div class="muted">212 minutes</div></div>
-        <div class="metric"><h4>Total Tips</h4><div class="muted">$987</div></div>
-        <div class="metric"><h4>Total Earnings</h4><div class="muted">$4,789</div></div>
-      </div>
-      <div class="debug" id="debug"></div>
+    <div class="grid2">
+      <div class="stat"><b>Your Metrics</b><div>Total streams this month: 42 unique streams</div><div>Total Private minutes billed: 541 minutes</div><div>Total Exclusive Minutes Billed: 212 minutes</div><div>Total Tips: $987</div><div>Total Earnings: $4,789</div></div>
+      <div class="stat"><b>Status</b><div id="status">Offline</div></div>
     </div>
-  </main>
+  </div>
+</main>
 
 <script>
-  const dbgEl = document.getElementById('debug');
-  function dbg(m){ const p=document.createElement('div'); p.textContent=m; dbgEl.appendChild(p); }
-  function slugify(s){ return (s||'').toLowerCase().trim().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,''); }
+function slugify(s){return (s||'').toLowerCase().trim().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,'');}
+const profile = JSON.parse(localStorage.getItem('lg_model')||'null');
+if(!profile || !profile.name){ location.href='/login.html'; }
+document.getElementById('hello').textContent = 'Welcome, ' + profile.name;
 
-  let profile = JSON.parse(localStorage.getItem('lg_model')||'null') || null;
-  const welcome = document.getElementById('welcome');
-  const statusEl = document.getElementById('status');
-  const goLive = document.getElementById('goLive');
-  const endLive = document.getElementById('endLive');
-  if (!profile?.name){ location.href = '/'; }
-  const display = profile.name;
-  profile.handle = slugify(profile.name);
-  welcome.textContent = 'Welcome, ' + display;
-  localStorage.setItem('lg_model', JSON.stringify(profile));
+let streamWin = null;
+let realtime = null;
+let dirChan = null;
+let hbTimer = null;
+const handle = slugify(profile.name); // "taylored2u" expected
+const isT = handle === 'taylored2u';
+const statusEl = document.getElementById('status');
 
-  let realtime, dir, roomChan, hbTimer, roomWin;
+function startHeartbeat(){
+  if (hbTimer) return;
+  hbTimer = setInterval(()=>{ dirChan && dirChan.publish('join', { name: profile.name, handle }); }, 1000);
+}
+function stopHeartbeat(){
+  clearInterval(hbTimer); hbTimer = null;
+  dirChan && dirChan.publish('leave', { name: profile.name, handle });
+}
 
-  async function startRealtime(){
-    if (realtime) return;
-    const basePath = location.pathname.startsWith('/models') ? '/models' : '';
-    const authUrl = basePath + '/api/ably-token';
-    dbg('Connecting to Ably… (' + authUrl + ')');
-    const probe = await fetch(authUrl, {cache:'no-store'});
-    if (!probe.ok) dbg('Token endpoint status: ' + probe.status + ' (expect 200)');
-    realtime = new Ably.Realtime.Promise({ authUrl });
-    await realtime.connection.once('connected');
-    dir = realtime.channels.get('directory');
-    dbg('Connected to Ably.');
+async function initRealtime(){
+  if (realtime) return;
+  realtime = new Ably.Realtime.Promise({ authUrl: '/api/ably-token' });
+  await realtime.connection.once('connected');
+  dirChan = realtime.channels.get('directory');
+}
+
+document.getElementById('goLive').addEventListener('click', async ()=>{
+  await initRealtime();
+  startHeartbeat();
+  statusEl.textContent = 'Online';
+  document.getElementById('end').style.display='inline-flex';
+  // Open host room on THIS domain to guarantee same code as members update we ship next
+  const url = '/room/' + handle + '?host=1';
+  streamWin = window.open(url, '_blank');
+  if (!streamWin) alert('Please allow popups for Go Live');
+});
+
+document.getElementById('end').addEventListener('click', ()=>{
+  stopHeartbeat();
+  statusEl.textContent = 'Offline';
+  if (streamWin && !streamWin.closed){
+    streamWin.close();
   }
-
-  async function go_live(){
-    try{
-      const memberOrigin = location.origin.replace('models.', '');
-      const url = memberOrigin + '/room/' + profile.handle + '?host=1'; // host role
-      roomWin = window.open(url, '_blank');
-      dbg('Opened model room: ' + url);
-
-      await startRealtime();
-      statusEl.textContent = 'Live';
-      goLive.disabled = true; endLive.disabled = false;
-
-      await dir.publish('join', { handle: profile.handle, name: profile.name });
-      dbg('Published join for ' + profile.handle);
-
-      if (hbTimer) clearInterval(hbTimer);
-      hbTimer = setInterval(()=> dir.publish('join', { handle: profile.handle, name: profile.name }), 1000); // 1s heartbeat
-
-      roomChan = realtime.channels.get('room:'+profile.handle);
-      try { await roomChan.presence.enter({ model:true, t:Date.now() }); dbg('Entered room presence.'); } catch(e){ dbg('Presence enter failed: '+e.message); }
-    } catch(e){
-      dbg('Go Live failed: ' + e.message);
-      alert('Go Live failed: ' + e.message);
-      goLive.disabled = false; endLive.disabled = true;
-    }
-  }
-
-  async function end_live(){
-    try{
-      statusEl.textContent = 'Offline';
-      goLive.disabled = false; endLive.disabled = true;
-
-      if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
-      try { await dir?.publish('leave', { handle: profile.handle, name: profile.name }); dbg('Published leave.'); } catch(e){ dbg('Leave publish failed: '+e.message); }
-      try { await roomChan?.presence.leave(); dbg('Left room presence.'); } catch(e){}
-
-      if (roomWin && !roomWin.closed) {
-        roomWin.close();
-        dbg('Closed room window.');
-      }
-    } catch(e){
-      dbg('End stream error: ' + e.message);
-    }
-  }
-
-  goLive.addEventListener('click', go_live);
-  endLive.addEventListener('click', end_live);
-  window.addEventListener('beforeunload', end_live);
+  document.getElementById('end').style.display='none';
+});
 </script>
-</body>
-</html>
+</body></html>

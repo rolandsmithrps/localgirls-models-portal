@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Local Girls — Models</title><link rel="icon" href="data:,"/><style>
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Local Girls — Model Login</title><link rel="icon" href="data:,"/><style>
 :root { --bg:#0f0a1f; --panel:#1e103b; --accent:#a855f7; --text:#f8f8ff; --muted:#cbd5e1; --border:#3a1b73; }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
@@ -17,8 +17,23 @@ label{display:block;margin-bottom:6px}
 .stat{background:#150a2b;border:1px solid #3a1b73;border-radius:12px;padding:12px}
 </style></head>
 <body>
-<header><div class="brand">LOCAL GIRLS — Models <span class="badge">v8.2</span></div><a class="btn" href="/login.html">Login</a></header>
+<header><div class="brand">LOCAL GIRLS — Models <span class="badge">v8.2</span></div><a class="btn" href="/">Back</a></header>
 <main class="container">
-  <div class="panel"><h2>Welcome, LocalGirls Model</h2><p>Please login to begin streaming.</p></div>
+  <div class="panel" style="max-width:520px;margin:0 auto">
+    <h2>Model Login</h2>
+    <label>Login</label><input id="login" placeholder="e.g., Taylor" autocomplete="username"/>
+    <label>Password</label><input id="password" type="password" placeholder="Enter any password" autocomplete="current-password"/>
+    <button class="btn" id="continue" style="width:100%;margin-top:10px">Continue</button>
+  </div>
 </main>
+<script>
+document.getElementById('continue').addEventListener('click', function(){
+  const name=(document.getElementById('login').value||'').trim();
+  const pw=(document.getElementById('password').value||'').trim();
+  if(!name) return alert('Enter a login.');
+  if(!pw) return alert('Enter a password.');
+  localStorage.setItem('lg_model', JSON.stringify({ name }));
+  location.href='/dashboard.html';
+});
+</script>
 </body></html>
