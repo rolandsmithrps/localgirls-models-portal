@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Model Room</title>
   <style>
-    :root { --bg:#0f0a1f; --card:#17122b; --acc:#6d28d9; --text:#f8f8ff; --muted:#cbd5e1; }
+    :root { --bg:#0f0a1f; --card:#17122b; --acc:#6d28d9; --text:#f8f8ff; --muted:#cbd5e1; --warn:#f59e0b; --err:#ef4444; }
     body{background:var(--bg);color:var(--text);font-family:ui-sans-serif;margin:0}
     header{background:#4c1d95;padding:10px 14px;display:flex;gap:12px;align-items:center;justify-content:space-between}
     .pill{border:1px solid #fff3;border-radius:999px;padding:2px 8px}
@@ -14,9 +14,11 @@
     .panel{background:#1e103b;border:1px solid #3a1b73;border-radius:12px;padding:10px;height:72vh;display:flex;flex-direction:column;gap:10px}
     .debug{font-size:.85rem;color:var(--muted);margin-top:6px;white-space:pre-line}
     .btn{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:var(--acc);color:#fff;cursor:pointer}
-    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .toolbar{display:flex;gap:8px;align-items:center}
+    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .badge{display:inline-flex;gap:6px;align-items:center;border:1px solid #ffffff29;border-radius:999px;padding:4px 10px}
+    .note{padding:8px 10px;border-radius:10px;border:1px solid #5b21b6;background:#1a1433;color:var(--muted)}
+    .warn{border-color:#a16207;color:#fde68a}
+    .err{border-color:#9f1239;color:#fecaca}
   </style>
   <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
 </head>
@@ -40,6 +42,7 @@
   <div>
     <video id="remote" autoplay playsinline></video>
     <div id="debug" class="debug"></div>
+    <div id="diag" class="note warn" style="display:none"></div>
   </div>
   <div class="panel">
     <video id="local" autoplay muted playsinline></video>
@@ -49,7 +52,9 @@
 
 <script>
 const dbgEl = document.getElementById('debug');
+const diagEl = document.getElementById('diag');
 const log = (m) => { const p=document.createElement('div'); p.textContent = m; dbgEl.appendChild(p) };
+const diag = (m, cls='warn') => { diagEl.className = 'note ' + cls; diagEl.textContent = m; diagEl.style.display = 'block'; };
 
 const roomSlug = location.pathname.split('/room/')[1]?.split('?')[0] || 'room';
 const isHost = new URLSearchParams(location.search).has('host');
@@ -64,6 +69,17 @@ const presEl = document.getElementById('presencePill');
 const stateEl = document.getElementById('connState');
 function setPresence(n){ presEl.textContent = (n|0) + ' online'; }
 function setState(s){ stateEl.textContent = 'Peer: ' + s; }
+
+// Preflight diagnostics
+(function preflight(){
+  if (!window.isSecureContext) {
+    diag('This page is not running in a secure context. getUserMedia requires HTTPS (or localhost).', 'err');
+  }
+  if (window.top !== window && !document.hasFocus()) {
+    // embedded in iframe; remind about permissions
+    diag('Embedded in an iframe: ensure the iframe has allow="camera; microphone; autoplay" and the parent site Permissions-Policy allows camera/microphone for this origin.');
+  }
+})();
 
 async function getIceServers(){
   try{
@@ -85,9 +101,7 @@ async function initPeer(servers){
       log('ontrack ' + e.track.kind);
     }
   };
-  pc.onicecandidate = e => {
-    if (e.candidate) chan.publish('ice', e.candidate);
-  };
+  pc.onicecandidate = e => { if (e.candidate) chan.publish('ice', e.candidate); };
   pc.onconnectionstatechange = () => { setState(pc.connectionState); log('pc state: ' + pc.connectionState); };
   dc = pc.createDataChannel('chat');
 }
@@ -124,17 +138,25 @@ async function initPeer(servers){
 
   await initPeer(ice);
 
-  // Keep presence warm
+  // Keep presence warm for external polling
   setInterval(() => { fetch('/api/presence?room=' + encodeURIComponent(roomSlug)).catch(()=>{}); }, 30000);
 })();
 
 async function startMedia(){
-  localStream = await navigator.mediaDevices.getUserMedia({
-    video:{ width:{ ideal:1280 }, height:{ ideal:720 } },
-    audio:{ echoCancellation:true, noiseSuppression:true }
-  });
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-  document.getElementById('local').srcObject = localStream;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{ width:{ ideal:1280 }, height:{ ideal:720 } },
+      audio:{ echoCancellation:true, noiseSuppression:true }
+    });
+    localStream = stream;
+    stream.getTracks().forEach(t => pc.addTrack(t, stream));
+    document.getElementById('local').srcObject = stream;
+  } catch(e){
+    const msg = (e && e.name ? e.name+': ' : '') + (e && e.message ? e.message : e);
+    log('getUserMedia error ' + msg);
+    diag('Camera/Mic failed: ' + msg + '\nTip: Click the camera icon in the address bar and set to "Allow". If embedded, add iframe allow="camera; microphone; autoplay".', 'err');
+    throw e;
+  }
 }
 
 async function makeOffer(){
@@ -144,12 +166,8 @@ async function makeOffer(){
   log('offer ->');
 }
 
-document.getElementById('btnStart').onclick = async () => {
-  try{ await startMedia(); } catch(e){ alert('Allow camera/mic and retry'); }
-};
-document.getElementById('btnConnect').onclick = async () => {
-  try{ await makeOffer(); } catch(e){}
-};
+document.getElementById('btnStart').onclick = async () => { await startMedia(); };
+document.getElementById('btnConnect').onclick = async () => { await makeOffer(); };
 document.getElementById('btnMute').onclick = () => {
   if (!localStream) return;
   const tracks = localStream.getAudioTracks();
