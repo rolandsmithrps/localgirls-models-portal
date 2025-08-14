@@ -13,6 +13,7 @@
     main{max-width:1100px;margin:0 auto;padding:20px}
     .top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
     .go{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:#6d28d9;color:#fff;cursor:pointer}
+    .end{padding:10px 14px;border-radius:10px;border:1px solid #7f1d1d;background:#dc2626;color:#fff;cursor:pointer}
     .panel{background:#1e103b;border:1px solid #3a1b73;border-radius:14px;padding:16px}
     .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
     .metric{background:#150a2b;border:1px solid #3a1b73;border-radius:12px;padding:14px}
@@ -25,109 +26,109 @@
 </head>
 <body>
   <header>
-    <div><b>LOCAL GIRLS — Models</b><span class="badge">v8</span></div>
+    <div><b>LOCAL GIRLS — Models</b><span class="badge">v8.1</span></div>
     <div>Status: <span id="status">Offline</span></div>
   </header>
   <main>
     <div class="top">
       <h2 id="welcome">Welcome</h2>
-      <button id="goLive" class="go">Go Live</button>
+      <div style="display:flex;gap:10px">
+        <button id="goLive" class="go">Go Live</button>
+        <button id="endLive" class="end" disabled>End Stream</button>
+      </div>
     </div>
 
     <div class="panel">
       <h3>Your Metrics</h3>
       <div class="metrics">
-        <div class="metric">
-          <h4>Total Streams this Month</h4>
-          <div class="muted">42 unique streams</div>
-        </div>
-        <div class="metric">
-          <h4>Total Private Minutes Billed</h4>
-          <div class="muted">541 minutes</div>
-        </div>
-        <div class="metric">
-          <h4>Total Exclusive Minutes Billed</h4>
-          <div class="muted">212 minutes</div>
-        </div>
-        <div class="metric">
-          <h4>Total Tips</h4>
-          <div class="muted">$987</div>
-        </div>
-        <div class="metric">
-          <h4>Total Earnings</h4>
-          <div class="muted">$4,789</div>
-        </div>
+        <div class="metric"><h4>Total Streams this Month</h4><div class="muted">42 unique streams</div></div>
+        <div class="metric"><h4>Total Private Minutes Billed</h4><div class="muted">541 minutes</div></div>
+        <div class="metric"><h4>Total Exclusive Minutes Billed</h4><div class="muted">212 minutes</div></div>
+        <div class="metric"><h4>Total Tips</h4><div class="muted">$987</div></div>
+        <div class="metric"><h4>Total Earnings</h4><div class="muted">$4,789</div></div>
       </div>
       <div class="debug" id="debug"></div>
     </div>
   </main>
 
 <script>
-  // Helpers
   const dbgEl = document.getElementById('debug');
   function dbg(m){ const p=document.createElement('div'); p.textContent=m; dbgEl.appendChild(p); }
   function slugify(s){ return (s||'').toLowerCase().trim().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,''); }
 
-  // Load profile from login
   let profile = JSON.parse(localStorage.getItem('lg_model')||'null') || null;
   const welcome = document.getElementById('welcome');
   const statusEl = document.getElementById('status');
   const goLive = document.getElementById('goLive');
+  const endLive = document.getElementById('endLive');
   if (!profile?.name){ location.href = '/'; }
   const display = profile.name;
   profile.handle = slugify(profile.name);
   welcome.textContent = 'Welcome, ' + display;
-  dbg('Computed handle: ' + profile.handle);
   localStorage.setItem('lg_model', JSON.stringify(profile));
 
-  // Realtime setup
-  let realtime, dir, roomChan, hbTimer;
+  let realtime, dir, roomChan, hbTimer, roomWin;
+
   async function startRealtime(){
     if (realtime) return;
-    try {
-      const basePath = location.pathname.startsWith('/models') ? '/models' : '';
-      const authUrl = basePath + '/api/ably-token';
-      dbg('Connecting to Ably… (' + authUrl + ')');
-      const probe = await fetch(authUrl, {cache:'no-store'});
-      if (!probe.ok) dbg('Token endpoint status: ' + probe.status + ' (expect 200)');
-      realtime = new Ably.Realtime.Promise({ authUrl });
-      await realtime.connection.once('connected');
-      dir = realtime.channels.get('directory');
-      dbg('Connected to Ably.');
-    } catch (e) {
-      dbg('Realtime error: ' + e.message);
-      throw e;
-    }
+    const basePath = location.pathname.startsWith('/models') ? '/models' : '';
+    const authUrl = basePath + '/api/ably-token';
+    dbg('Connecting to Ably… (' + authUrl + ')');
+    const probe = await fetch(authUrl, {cache:'no-store'});
+    if (!probe.ok) dbg('Token endpoint status: ' + probe.status + ' (expect 200)');
+    realtime = new Ably.Realtime.Promise({ authUrl });
+    await realtime.connection.once('connected');
+    dir = realtime.channels.get('directory');
+    dbg('Connected to Ably.');
   }
 
   async function go_live(){
     try{
-      // Open model room tab immediately
       const memberOrigin = location.origin.replace('models.', '');
       const url = memberOrigin + '/room/' + profile.handle;
-      window.open(url, '_blank');
+      roomWin = window.open(url, '_blank');
       dbg('Opened model room: ' + url);
 
-      // Start realtime in background and broadcast
       await startRealtime();
       statusEl.textContent = 'Live';
-      goLive.disabled = true;
+      goLive.disabled = true; endLive.disabled = false;
 
       await dir.publish('join', { handle: profile.handle, name: profile.name });
       dbg('Published join for ' + profile.handle);
 
       if (hbTimer) clearInterval(hbTimer);
-      hbTimer = setInterval(()=> dir.publish('join', { handle: profile.handle, name: profile.name }), 5000);
+      hbTimer = setInterval(()=> dir.publish('join', { handle: profile.handle, name: profile.name }), 1000); // 1s heartbeat
 
       roomChan = realtime.channels.get('room:'+profile.handle);
       try { await roomChan.presence.enter({ model:true, t:Date.now() }); dbg('Entered room presence.'); } catch(e){ dbg('Presence enter failed: '+e.message); }
     } catch(e){
       dbg('Go Live failed: ' + e.message);
       alert('Go Live failed: ' + e.message);
+      goLive.disabled = false; endLive.disabled = true;
+    }
+  }
+
+  async function end_live(){
+    try{
+      statusEl.textContent = 'Offline';
+      goLive.disabled = false; endLive.disabled = true;
+
+      if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
+      try { await dir?.publish('leave', { handle: profile.handle, name: profile.name }); dbg('Published leave.'); } catch(e){ dbg('Leave publish failed: '+e.message); }
+      try { await roomChan?.presence.leave(); dbg('Left room presence.'); } catch(e){}
+
+      if (roomWin && !roomWin.closed) {
+        roomWin.close();
+        dbg('Closed room window.');
+      }
+    } catch(e){
+      dbg('End stream error: ' + e.message);
     }
   }
 
   goLive.addEventListener('click', go_live);
+  endLive.addEventListener('click', end_live);
+  window.addEventListener('beforeunload', end_live);
 </script>
 </body>
 </html>
