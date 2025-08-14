@@ -1,13 +1,16 @@
-import Ably from "ably";
+// /api/ably-token.js  — CommonJS version (rock solid on Vercel)
+const Ably = require('ably/promises');
 
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   try {
     const apiKey = process.env.ABLY_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: "missing_env", message: "ABLY_API_KEY not set" });
+    if (!apiKey) {
+      return res.status(500).json({ error: 'missing_env', message: 'ABLY_API_KEY not set' });
+    }
     const client = new Ably.Rest(apiKey);
-    const tokenRequest = await client.auth.createTokenRequest({ clientId: "browser" });
-    res.status(200).json(tokenRequest);
+    const tokenRequest = await client.auth.createTokenRequest({ clientId: 'browser' });
+    return res.status(200).json(tokenRequest);
   } catch (e) {
-    res.status(500).json({ error: "token_error", message: e.message });
+    return res.status(500).json({ error: 'token_error', message: e.message || String(e) });
   }
-}
+};
