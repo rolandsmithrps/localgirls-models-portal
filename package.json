@@ -1,0 +1,9 @@
+{
+  "name": "localgirls-starter",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "ably": "^1.2.46"
+  }
+}

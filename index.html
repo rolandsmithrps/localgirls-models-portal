@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Local Girls — Models Portal</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root { --bg:#0f0a1f; --card:#2a1154; --accent:#a855f7; --text:#f8f8ff; --muted:#cbd5e1; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    header{background:#4c1d95;padding:10px 16px;color:#fff}
+    main{max-width:800px;margin:0 auto;padding:16px}
+    .panel{background:#1e103b;border:1px solid #3a1b73;border-radius:14px;padding:16px}
+    input{width:100%;padding:10px;border-radius:10px;border:1px solid #3a1b73;background:#150a2b;color:#fff;margin:6px 0 10px}
+    button{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:#6d28d9;color:#fff;cursor:pointer}
+    .muted{color:var(--muted)}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    code{background:#0b0717;padding:3px 6px;border-radius:6px}
+  </style>
+  <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+</head>
+<body>
+  <header><b>LOCAL GIRLS — Models</b></header>
+  <main>
+    <div class="panel">
+      <h2>Login (Simulated)</h2>
+      <p class="muted">No real accounts. This only sets your on-screen name & room link for filming.</p>
+      <div class="row">
+        <div style="flex:1">
+          <label>Display name</label>
+          <input id="name" placeholder="e.g., Violet" />
+        </div>
+        <div style="flex:1">
+          <label>Handle (used in URL)</label>
+          <input id="handle" placeholder="e.g., violet" />
+        </div>
+      </div>
+      <button id="save">Continue</button>
+    </div>
+
+    <div class="panel" style="margin-top:12px;display:none" id="livePanel">
+      <h3>Status: <span id="status">Offline</span></h3>
+      <p>Room URL for members: <code id="memberUrl"></code></p>
+      <div class="row">
+        <button id="goLive">Go Live</button>
+        <button id="endLive" disabled>End Session</button>
+        <button id="openRoom" disabled>Open as Model</button>
+      </div>
+      <p class="muted">Going live broadcasts your presence to the public directory (no data stored). Closing the tab ends the session.</p>
+    </div>
+  </main>
+
+<script>
+  const nameEl = document.getElementById('name');
+  const handleEl = document.getElementById('handle');
+  const save = document.getElementById('save');
+  const livePanel = document.getElementById('livePanel');
+  const statusEl = document.getElementById('status');
+  const memberUrlEl = document.getElementById('memberUrl');
+  const goLive = document.getElementById('goLive');
+  const endLive = document.getElementById('endLive');
+  const openRoom = document.getElementById('openRoom');
+
+  let profile = JSON.parse(localStorage.getItem('lg_model')||'null') || {};
+  if (profile.name) nameEl.value = profile.name;
+  if (profile.handle) handleEl.value = profile.handle;
+
+  save.addEventListener('click', ()=>{
+    const name = (nameEl.value||'').trim();
+    const handle = (handleEl.value||'').trim() || name.toLowerCase().replace(/\s+/g,'-');
+    if (!name || !handle) return alert('Enter a name and handle.');
+    profile = { name, handle };
+    localStorage.setItem('lg_model', JSON.stringify(profile));
+    memberUrlEl.textContent = 'https://localgirls.io/room/'+handle;
+    livePanel.style.display = 'block';
+  });
+
+  let realtime, dir, roomChan, clientId;
+  async function startRealtime(){
+    realtime = new Ably.Realtime.Promise({ authUrl:'/api/ably-token' });
+    await realtime.connection.once('connected');
+    clientId = realtime.auth.clientId;
+    dir = realtime.channels.get('directory');
+  }
+
+  async function go_live(){
+    if (!profile?.handle) return alert('Save your profile first.');
+    if (!realtime) await startRealtime();
+    statusEl.textContent = 'Live';
+    goLive.disabled = true; endLive.disabled = false; openRoom.disabled = false;
+
+    // announce join
+    dir.publish('join', { handle: profile.handle, name: profile.name });
+
+    // heartbeat (keeps directory fresh)
+    window._hb = setInterval(()=> dir.publish('join', { handle: profile.handle, name: profile.name }), 20000);
+
+    // open model room channel (optional, not required here)
+    roomChan = realtime.channels.get('room:'+profile.handle);
+    await roomChan.presence.enter({ model:true, t:Date.now() });
+  }
+
+  async function end_live(){
+    statusEl.textContent = 'Offline';
+    goLive.disabled = false; endLive.disabled = true; openRoom.disabled = true;
+    if (window._hb) clearInterval(window._hb);
+    if (dir) dir.publish('leave', { handle: profile.handle });
+    try { await roomChan?.presence.leave(); } catch {}
+  }
+
+  goLive.addEventListener('click', go_live);
+  endLive.addEventListener('click', end_live);
+  openRoom.addEventListener('click', ()=> window.open('https://localgirls.io/room/'+profile.handle, '_blank'));
+  window.addEventListener('beforeunload', end_live);
+</script>
+</body>
+</html>
