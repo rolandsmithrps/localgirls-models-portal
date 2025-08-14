@@ -181,5 +181,88 @@
 })();
 </script>
 
+
+<script>
+// --- LocalGirls Models Portal overrides (v6) ---
+(function(){
+  const debugEl = document.getElementById('debug');
+  const livePanel = document.getElementById('livePanel');
+  const statusEl = document.getElementById('status');
+  const memberUrlEl = document.getElementById('memberUrl');
+  const nameEl = document.getElementById('name');
+  const goLiveBtn = document.getElementById('goLive');
+  const endLiveBtn = document.getElementById('endLive');
+  const saveBtn = document.getElementById('save');
+
+  function dbg(m){ if(debugEl){ const p=document.createElement('div'); p.textContent=m; debugEl.appendChild(p); } }
+  function slugify(s){ return (s||'').toLowerCase().trim().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,''); }
+
+  // Override Save (Continue): derive handle from display name
+  if (saveBtn) {
+    saveBtn.addEventListener('click', function(e){
+      try {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const name = (nameEl && nameEl.value || '').trim();
+        if (!name) { alert('Enter a display name.'); nameEl && nameEl.focus(); return; }
+        const handle = slugify(name);
+        window.profile = { name, handle };
+        localStorage.setItem('lg_model', JSON.stringify(window.profile));
+        const memberOrigin = location.origin.replace('models.', '');
+        const url = memberOrigin + '/room/' + handle;
+        if (memberUrlEl) memberUrlEl.textContent = url;
+        if (livePanel) livePanel.style.display = 'block';
+        if (statusEl) statusEl.textContent = 'Offline';
+        dbg('Saved profile: ' + name + ' (' + handle + ')');
+        livePanel && livePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (err) {
+        console.error(err); alert('Save failed: ' + err.message); dbg('Save error: ' + err.message);
+      }
+    }, { capture: true });
+  }
+
+  // Override go_live to also open the model room and remove dependence on "open as model"
+  window.go_live = async function(){
+    try {
+      if (!window.profile || !window.profile.name) { alert('Save your profile first.'); return; }
+
+      // startRealtime defined earlier in page (uses /api/ably-token auto-detect)
+      if (typeof startRealtime !== 'function') { alert('Realtime not ready. Reload the page.'); return; }
+      if (!window.realtime) await startRealtime();
+
+      if (statusEl) statusEl.textContent = 'Live';
+      if (goLiveBtn) goLiveBtn.disabled = true;
+      if (endLiveBtn) endLiveBtn.disabled = false;
+
+      const dir = window.realtime.channels.get('directory');
+      await dir.publish('join', { handle: window.profile.handle, name: window.profile.name });
+      dbg('Published join for ' + window.profile.handle);
+
+      window._hb && clearInterval(window._hb);
+      window._hb = setInterval(()=> dir.publish('join', { handle: window.profile.handle, name: window.profile.name }), 5000);
+
+      const roomChan = window.realtime.channels.get('room:' + window.profile.handle);
+      try { await roomChan.presence.enter({ model:true, t:Date.now() }); dbg('Entered room presence.'); } catch(e){ dbg('Presence enter failed: ' + e.message); }
+
+      const memberOrigin = location.origin.replace('models.', '');
+      const url = memberOrigin + '/room/' + window.profile.handle;
+      window.open(url, '_blank');
+      dbg('Opened model room: ' + url);
+    } catch (e) {
+      if (goLiveBtn) goLiveBtn.disabled = false;
+      if (endLiveBtn) endLiveBtn.disabled = true;
+      alert('Go Live failed: ' + e.message);
+      dbg('Go Live failed: ' + e.message);
+    }
+  };
+
+  // Ensure buttons are wired to the overridden functions
+  document.addEventListener('DOMContentLoaded', () => {
+    if (goLiveBtn) goLiveBtn.onclick = (e)=>{ e.preventDefault(); window.go_live(); };
+    if (endLiveBtn) endLiveBtn.onclick = (e)=>{ e.preventDefault(); window.end_live && window.end_live(); };
+  });
+})();
+</script>
+
 </body>
 </html>
