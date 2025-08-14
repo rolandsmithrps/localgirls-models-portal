@@ -6,21 +6,27 @@
   <title>Local Girls — Models Portal</title>
   <link rel="icon" href="data:," />
   <style>
-    :root { --bg:#0f0a1f; --card:#2a1154; --accent:#a855f7; --text:#f8f8ff; --muted:#cbd5e1; }
+    :root { --bg:#0f0a1f; --card:#1e103b; --accent:#a855f7; --text:#f8f8ff; --muted:#cbd5e1; --border:#3a1b73; }
     *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    header{background:#4c1d95;padding:10px 16px;color:#fff}
-    main{max-width:800px;margin:0 auto;padding:16px}
-    .panel{background:#1e103b;border:1px solid #3a1b73;border-radius:14px;padding:16px}
-    input{width:100%;padding:10px;border-radius:10px;border:1px solid #3a1b73;background:#150a2b;color:#fff;margin:6px 0 10px}
-    button{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:#6d28d9;color:#fff;cursor:pointer}
+    header{background:#4c1d95;padding:12px 16px;color:#fff;display:flex;align-items:center;gap:10px}
+    header .badge{font-weight:600;font-size:.85rem;padding:4px 8px;border:1px solid #ffffff33;border-radius:999px;opacity:.9}
+    main{max-width:820px;margin:0 auto;padding:18px}
+    .panel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
     .muted{color:var(--muted)}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    label{display:block;margin-bottom:6px}
+    input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#150a2b;color:#fff;margin-bottom:12px}
+    button{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:#6d28d9;color:#fff;cursor:pointer}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
     code{background:#0b0717;padding:3px 6px;border-radius:6px}
+    .btns{display:flex;gap:10px;flex-wrap:wrap}
   </style>
   <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
 </head>
 <body>
-  <header><b>LOCAL GIRLS — Models</b> <span style="font-weight:600;font-size:.85rem;padding:4px 8px;border:1px solid #ffffff33;border-radius:999px;margin-left:8px;opacity:.9">v5</span></header>
+  <header>
+    <b>LOCAL GIRLS — Models</b>
+    <span class="badge">v7</span>
+  </header>
   <main>
     <div class="panel">
       <h2>Login</h2>
@@ -28,11 +34,7 @@
       <div class="row">
         <div style="flex:1">
           <label>Display name</label>
-          <input id="name" placeholder="e.g., Violet" />
-        </div>
-        <div style="flex:1">
-          <label>Handle (used in URL)</label>
-          <input id="handle" placeholder="e.g., violet" />
+          <input id="name" placeholder="e.g., Taylored2U" />
         </div>
       </div>
       <button id="save">Continue</button>
@@ -41,228 +43,119 @@
     <div class="panel" style="margin-top:12px;display:none" id="livePanel">
       <h3>Status: <span id="status">Offline</span></h3>
       <p>Room URL for members: <code id="memberUrl"></code></p>
-      <div class="row">
+      <div class="btns">
         <button id="goLive">Go Live</button>
         <button id="endLive" disabled>End Session</button>
-        <button id="openRoom" disabled>Open as Model</button>
       </div>
-      <p class="muted">Going live broadcasts your presence to the public directory (no data stored). Closing the tab ends the session.</p>
-<div id="debug" class="muted" style="margin-top:8px;font-size:.85rem"></div>
+      <div id="debug" class="muted" style="margin-top:10px;font-size:.9rem"></div>
     </div>
   </main>
 
 <script>
-  const nameEl = document.getElementById('name');
-  const handleEl = document.getElementById('handle');
-  const save = document.getElementById('save');
-  const livePanel = document.getElementById('livePanel');
-  const statusEl = document.getElementById('status');
-  const memberUrlEl = document.getElementById('memberUrl');
-  const goLive = document.getElementById('goLive');
-  const endLive = document.getElementById('endLive');
-  const openRoom = document.getElementById('openRoom');
+/** Helpers **/
+const debugEl = document.getElementById('debug');
+function dbg(m){ if(debugEl){ const p=document.createElement('div'); p.textContent=m; debugEl.appendChild(p);} }
+function slugify(s){ return (s||'').toLowerCase().trim().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,''); }
 
-  let profile = JSON.parse(localStorage.getItem('lg_model')||'null') || {};
-  if (profile.name) nameEl.value = profile.name;
-  if (profile.handle) handleEl.value = profile.handle;
+/** Elements **/
+const nameEl = document.getElementById('name');
+const saveBtn = document.getElementById('save');
+const livePanel = document.getElementById('livePanel');
+const statusEl = document.getElementById('status');
+const memberUrlEl = document.getElementById('memberUrl');
+const goLive = document.getElementById('goLive');
+const endLive = document.getElementById('endLive');
 
-  save.addEventListener('click', ()=>{
-    const name = (nameEl.value||'').trim();
-    const handle = (handleEl.value||'').trim() || name.toLowerCase().replace(/\s+/g,'-');
-    if (!name || !handle) return alert('Enter a name and handle.');
-    profile = { name, handle };
-    localStorage.setItem('lg_model', JSON.stringify(profile));
-    memberUrlEl.textContent = 'https://localgirls.io/room/'+handle;
-    livePanel.style.display = 'block';
-  });
+/** State **/
+let profile = JSON.parse(localStorage.getItem('lg_model')||'null') || null;
+let realtime, dir, roomChan, hbTimer;
 
-  let realtime, dir, roomChan, clientId;
-  const debugEl = document.getElementById('debug');
-  function dbg(msg){ if(!debugEl) return; const p=document.createElement('div'); p.textContent=msg; debugEl.appendChild(p); }
+if (profile?.name) {
+  nameEl.value = profile.name;
+  // compute handle again to be safe
+  profile.handle = slugify(profile.name);
+  const memberOrigin = location.origin.replace('models.', '');
+  memberUrlEl.textContent = memberOrigin + '/room/' + profile.handle;
+  livePanel.style.display = 'block';
+}
 
-  async function startRealtime(){
-    try {
-      const basePath = location.pathname.startsWith('/models') ? '/models' : '';
-      const authUrl = basePath + '/api/ably-token';
-      dbg('Connecting to Ably…');
-      realtime = new Ably.Realtime.Promise({ authUrl });
-      await realtime.connection.once('connected');
-      clientId = realtime.auth.clientId;
-      dir = realtime.channels.get('directory');
-      dbg('Connected to Ably. ClientId: ' + (clientId||'n/a'));
-    } catch (e) {
-      alert('Failed to connect to realtime. Check ABLY_API_KEY and /api/ably-token.
+/** Save (Continue) **/
+saveBtn.addEventListener('click', (e)=>{
+  e.preventDefault();
+  const name = (nameEl.value||'').trim();
+  if (!name) { alert('Enter a display name.'); nameEl.focus(); return; }
+  const handle = slugify(name);
+  profile = { name, handle };
+  localStorage.setItem('lg_model', JSON.stringify(profile));
+  const memberOrigin = location.origin.replace('models.', '');
+  memberUrlEl.textContent = memberOrigin + '/room/' + handle;
+  livePanel.style.display = 'block';
+  statusEl.textContent = 'Offline';
+  dbg('Saved profile: ' + name + ' (' + handle + ')');
+  livePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 
-' + e.message);
-      dbg('Realtime error: ' + e.message);
-      throw e;
-    }
+/** Realtime **/
+async function startRealtime(){
+  if (realtime) return;
+  try {
+    const basePath = location.pathname.startsWith('/models') ? '/models' : '';
+    const authUrl = basePath + '/api/ably-token';
+    dbg('Connecting to Ably…');
+    realtime = new Ably.Realtime.Promise({ authUrl });
+    await realtime.connection.once('connected');
+    dir = realtime.channels.get('directory');
+    dbg('Connected to Ably.');
+  } catch (e) {
+    alert('Failed to connect to realtime. Check ABLY_API_KEY and /api/ably-token.\n' + e.message);
+    dbg('Realtime error: ' + e.message);
+    throw e;
   }
+}
 
-  async function go_live(){
-    try {
-      if (!profile?.handle) return alert('Save your profile first.');
-      if (!realtime) await startRealtime();
-      // Sanity-check token endpoint quickly
-      try {
-        const r = await fetch((location.pathname.startsWith('/models')?'/models':'') + '/api/ably-token', { cache: 'no-store' });
-        if (!r.ok) dbg('Token endpoint HTTP ' + r.status);
-      } catch(e){ dbg('Token fetch failed: '+e.message); }
+/** Go Live: broadcast + open room tab **/
+async function go_live(){
+  try {
+    if (!profile?.name) return alert('Save your profile first.');
+    await startRealtime();
 
-      statusEl.textContent = 'Live';
-      goLive.disabled = true; endLive.disabled = false; openRoom.disabled = false;
+    statusEl.textContent = 'Live';
+    goLive.disabled = true; endLive.disabled = false;
 
-      await dir.publish('join', { handle: profile.handle, name: profile.name });
-      dbg('Published join for ' + profile.handle);
+    await dir.publish('join', { handle: profile.handle, name: profile.name });
+    dbg('Published join for ' + profile.handle);
 
-      window._hb = setInterval(()=> dir.publish('join', { handle: profile.handle, name: profile.name }), 5000);
+    if (hbTimer) clearInterval(hbTimer);
+    hbTimer = setInterval(()=> dir.publish('join', { handle: profile.handle, name: profile.name }), 5000);
 
-      roomChan = realtime.channels.get('room:'+profile.handle);
-      try { await roomChan.presence.enter({ model:true, t:Date.now() }); dbg('Entered room presence.'); } catch(e){ dbg('Presence enter failed: '+e.message); }
-    } catch (e) {
-      goLive.disabled = false; endLive.disabled = true; openRoom.disabled = true;
-      dbg('Go Live failed: ' + e.message);
-    }
+    roomChan = realtime.channels.get('room:'+profile.handle);
+    try { await roomChan.presence.enter({ model:true, t:Date.now() }); dbg('Entered room presence.'); } catch(e){ dbg('Presence enter failed: '+e.message); }
+
+    const memberOrigin = location.origin.replace('models.', '');
+    const url = memberOrigin + '/room/' + profile.handle;
+    window.open(url, '_blank');
+    dbg('Opened model room: ' + url);
+  } catch(e){
+    goLive.disabled = false; endLive.disabled = true;
+    dbg('Go Live failed: ' + e.message);
+    alert('Go Live failed: ' + e.message);
   }
+}
 
-  async function end_live(){
-    try {
-      statusEl.textContent = 'Offline';
-      goLive.disabled = false; endLive.disabled = true; openRoom.disabled = true;
-      if (window._hb) clearInterval(window._hb);
-      if (dir) await dir.publish('leave', { handle: profile.handle });
-      try { await roomChan?.presence.leave(); } catch {}
-      dbg('Ended live.');
-    } catch (e) {
-      dbg('End live error: ' + e.message);
-    }
-  }
+async function end_live(){
+  try{
+    statusEl.textContent = 'Offline';
+    goLive.disabled = false; endLive.disabled = true;
+    hbTimer && clearInterval(hbTimer);
+    try { await dir?.publish('leave', { handle: profile?.handle, name: profile?.name }); } catch{}
+    try { await roomChan?.presence.leave(); } catch{}
+    dbg('Ended live.');
+  }catch(e){ dbg('End live error: '+e.message); }
+}
 
-  goLive.addEventListener('click', go_live);
-  endLive.addEventListener('click', end_live);
-  openRoom.addEventListener('click', ()=> window.open('https://localgirls.io/room/'+profile.handle, '_blank'));
-  window.addEventListener('beforeunload', end_live);
-  window.addEventListener('error', (e)=> dbg('JS error: '+e.message));
+goLive.addEventListener('click', (e)=>{ e.preventDefault(); go_live(); });
+endLive.addEventListener('click', (e)=>{ e.preventDefault(); end_live(); });
+window.addEventListener('beforeunload', end_live);
 </script>
-
-<script>
-(function(){
-  const debugEl = document.getElementById('debug');
-  const livePanel = document.getElementById('livePanel');
-  const statusEl = document.getElementById('status');
-  const memberUrlEl = document.getElementById('memberUrl');
-  const nameEl = document.getElementById('name');
-  const handleEl = document.getElementById('handle');
-  const save = document.getElementById('save');
-  function dbg(m){ if(debugEl){ const p=document.createElement('div'); p.textContent=m; debugEl.appendChild(p);} }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    if (!save) { dbg('Save button not found'); return; }
-    save.addEventListener('click', (e)=>{
-      try {
-        e.preventDefault();
-        const name = (nameEl.value||'').trim();
-        const handle = ((handleEl.value||'').trim() || name.toLowerCase().replace(/\s+/g,'-')).replace(/[^a-z0-9\-]/g,'');
-        if (!name) { alert('Enter a display name.'); nameEl.focus(); return; }
-        if (!handle) { alert('Enter a handle.'); handleEl.focus(); return; }
-        window.profile = { name, handle };
-        localStorage.setItem('lg_model', JSON.stringify(window.profile));
-        memberUrlEl.textContent = (location.origin.replace('models.', '')) + '/room/' + handle;
-        if (livePanel) livePanel.style.display = 'block';
-        if (statusEl) statusEl.textContent = 'Offline';
-        dbg('Saved profile: ' + name + ' (' + handle + ')');
-        livePanel && livePanel.scrollIntoView({behavior:'smooth', block:'start'});
-      } catch (err) {
-        console.error(err); dbg('Save error: ' + (err.message||err));
-        alert('Save failed: ' + err.message);
-      }
-    }, { once: false });
-  });
-})();
-</script>
-
-
-<script>
-// --- LocalGirls Models Portal overrides (v6) ---
-(function(){
-  const debugEl = document.getElementById('debug');
-  const livePanel = document.getElementById('livePanel');
-  const statusEl = document.getElementById('status');
-  const memberUrlEl = document.getElementById('memberUrl');
-  const nameEl = document.getElementById('name');
-  const goLiveBtn = document.getElementById('goLive');
-  const endLiveBtn = document.getElementById('endLive');
-  const saveBtn = document.getElementById('save');
-
-  function dbg(m){ if(debugEl){ const p=document.createElement('div'); p.textContent=m; debugEl.appendChild(p); } }
-  function slugify(s){ return (s||'').toLowerCase().trim().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,''); }
-
-  // Override Save (Continue): derive handle from display name
-  if (saveBtn) {
-    saveBtn.addEventListener('click', function(e){
-      try {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        const name = (nameEl && nameEl.value || '').trim();
-        if (!name) { alert('Enter a display name.'); nameEl && nameEl.focus(); return; }
-        const handle = slugify(name);
-        window.profile = { name, handle };
-        localStorage.setItem('lg_model', JSON.stringify(window.profile));
-        const memberOrigin = location.origin.replace('models.', '');
-        const url = memberOrigin + '/room/' + handle;
-        if (memberUrlEl) memberUrlEl.textContent = url;
-        if (livePanel) livePanel.style.display = 'block';
-        if (statusEl) statusEl.textContent = 'Offline';
-        dbg('Saved profile: ' + name + ' (' + handle + ')');
-        livePanel && livePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } catch (err) {
-        console.error(err); alert('Save failed: ' + err.message); dbg('Save error: ' + err.message);
-      }
-    }, { capture: true });
-  }
-
-  // Override go_live to also open the model room and remove dependence on "open as model"
-  window.go_live = async function(){
-    try {
-      if (!window.profile || !window.profile.name) { alert('Save your profile first.'); return; }
-
-      // startRealtime defined earlier in page (uses /api/ably-token auto-detect)
-      if (typeof startRealtime !== 'function') { alert('Realtime not ready. Reload the page.'); return; }
-      if (!window.realtime) await startRealtime();
-
-      if (statusEl) statusEl.textContent = 'Live';
-      if (goLiveBtn) goLiveBtn.disabled = true;
-      if (endLiveBtn) endLiveBtn.disabled = false;
-
-      const dir = window.realtime.channels.get('directory');
-      await dir.publish('join', { handle: window.profile.handle, name: window.profile.name });
-      dbg('Published join for ' + window.profile.handle);
-
-      window._hb && clearInterval(window._hb);
-      window._hb = setInterval(()=> dir.publish('join', { handle: window.profile.handle, name: window.profile.name }), 5000);
-
-      const roomChan = window.realtime.channels.get('room:' + window.profile.handle);
-      try { await roomChan.presence.enter({ model:true, t:Date.now() }); dbg('Entered room presence.'); } catch(e){ dbg('Presence enter failed: ' + e.message); }
-
-      const memberOrigin = location.origin.replace('models.', '');
-      const url = memberOrigin + '/room/' + window.profile.handle;
-      window.open(url, '_blank');
-      dbg('Opened model room: ' + url);
-    } catch (e) {
-      if (goLiveBtn) goLiveBtn.disabled = false;
-      if (endLiveBtn) endLiveBtn.disabled = true;
-      alert('Go Live failed: ' + e.message);
-      dbg('Go Live failed: ' + e.message);
-    }
-  };
-
-  // Ensure buttons are wired to the overridden functions
-  document.addEventListener('DOMContentLoaded', () => {
-    if (goLiveBtn) goLiveBtn.onclick = (e)=>{ e.preventDefault(); window.go_live(); };
-    if (endLiveBtn) endLiveBtn.onclick = (e)=>{ e.preventDefault(); window.end_live && window.end_live(); };
-  });
-})();
-</script>
-
 </body>
 </html>
