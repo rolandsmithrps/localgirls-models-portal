@@ -20,7 +20,7 @@
   <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
 </head>
 <body>
-  <header><b>LOCAL GIRLS — Models</b></header>
+  <header><b>LOCAL GIRLS — Models</b> <span style="font-weight:600;font-size:.85rem;padding:4px 8px;border:1px solid #ffffff33;border-radius:999px;margin-left:8px;opacity:.9">v5</span></header>
   <main>
     <div class="panel">
       <h2>Login</h2>
@@ -144,5 +144,42 @@
   window.addEventListener('beforeunload', end_live);
   window.addEventListener('error', (e)=> dbg('JS error: '+e.message));
 </script>
+
+<script>
+(function(){
+  const debugEl = document.getElementById('debug');
+  const livePanel = document.getElementById('livePanel');
+  const statusEl = document.getElementById('status');
+  const memberUrlEl = document.getElementById('memberUrl');
+  const nameEl = document.getElementById('name');
+  const handleEl = document.getElementById('handle');
+  const save = document.getElementById('save');
+  function dbg(m){ if(debugEl){ const p=document.createElement('div'); p.textContent=m; debugEl.appendChild(p);} }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!save) { dbg('Save button not found'); return; }
+    save.addEventListener('click', (e)=>{
+      try {
+        e.preventDefault();
+        const name = (nameEl.value||'').trim();
+        const handle = ((handleEl.value||'').trim() || name.toLowerCase().replace(/\s+/g,'-')).replace(/[^a-z0-9\-]/g,'');
+        if (!name) { alert('Enter a display name.'); nameEl.focus(); return; }
+        if (!handle) { alert('Enter a handle.'); handleEl.focus(); return; }
+        window.profile = { name, handle };
+        localStorage.setItem('lg_model', JSON.stringify(window.profile));
+        memberUrlEl.textContent = (location.origin.replace('models.', '')) + '/room/' + handle;
+        if (livePanel) livePanel.style.display = 'block';
+        if (statusEl) statusEl.textContent = 'Offline';
+        dbg('Saved profile: ' + name + ' (' + handle + ')');
+        livePanel && livePanel.scrollIntoView({behavior:'smooth', block:'start'});
+      } catch (err) {
+        console.error(err); dbg('Save error: ' + (err.message||err));
+        alert('Save failed: ' + err.message);
+      }
+    }, { once: false });
+  });
+})();
+</script>
+
 </body>
 </html>
