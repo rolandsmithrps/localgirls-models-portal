@@ -25,7 +25,7 @@
 <body>
   <header>
     <b>LOCAL GIRLS — Models</b>
-    <span class="badge">v7</span>
+    <span class="badge">v7b</span>
   </header>
   <main>
     <div class="panel">
@@ -101,8 +101,24 @@ async function startRealtime(){
   try {
     const basePath = location.pathname.startsWith('/models') ? '/models' : '';
     const authUrl = basePath + '/api/ably-token';
-    dbg('Connecting to Ably…');
+    dbg('Connecting to Ably… (' + authUrl + ')');
+    // Fire a quick probe to surface 404/500 fast
+    try {
+      const probe = await fetch(authUrl, { method:'GET', cache:'no-store' });
+      if (!probe.ok) dbg('Token endpoint status: ' + probe.status + ' (should be 200)');
+    } catch (e) {
+      dbg('Token endpoint fetch error: ' + e.message);
+    }
     realtime = new Ably.Realtime.Promise({ authUrl });
+    const timeout = new Promise((_,rej)=> setTimeout(()=> rej(new Error('Ably connect timeout')), 4000));
+    await Promise.race([ realtime.connection.once('connected'), timeout ]);
+    dir = realtime.channels.get('directory');
+    dbg('Connected to Ably.');
+  } catch (e) {
+    dbg('Realtime error: ' + e.message);
+    throw e;
+  }
+});
     await realtime.connection.once('connected');
     dir = realtime.channels.get('directory');
     dbg('Connected to Ably.');
@@ -117,12 +133,38 @@ async function startRealtime(){
 async function go_live(){
   try {
     if (!profile?.name) return alert('Save your profile first.');
-    await startRealtime();
 
-    statusEl.textContent = 'Live';
-    goLive.disabled = true; endLive.disabled = false;
+    // Open the room tab immediately so filming doesn't wait on network
+    const memberOrigin = location.origin.replace('models.', '');
+    const url = memberOrigin + '/room/' + profile.handle;
+    const opened = window.open(url, '_blank');
+    dbg('Opened model room: ' + url + (opened ? '' : ' (popup blocked)'));
 
-    await dir.publish('join', { handle: profile.handle, name: profile.name });
+    // Try to connect realtime (non-blocking)
+    try {
+      await startRealtime();
+      statusEl.textContent = 'Live';
+      goLive.disabled = true; endLive.disabled = false;
+
+      await dir.publish('join', { handle: profile.handle, name: profile.name });
+      dbg('Published join for ' + profile.handle);
+
+      hbTimer && clearInterval(hbTimer);
+      hbTimer = setInterval(()=> dir.publish('join', { handle: profile.handle, name: profile.name }), 5000);
+
+      roomChan = realtime.channels.get('room:'+profile.handle);
+      try { await roomChan.presence.enter({ model:true, t:Date.now() }); dbg('Entered room presence.'); } catch(e){ dbg('Presence enter failed: '+e.message); }
+    } catch (e) {
+      dbg('Go Live (realtime) failed: ' + e.message + ' — room tab still opened for filming.');
+      // Keep buttons enabled to retry
+      goLive.disabled = false; endLive.disabled = true;
+    }
+  } catch (e) {
+    goLive.disabled = false; endLive.disabled = true;
+    alert('Go Live failed: ' + e.message);
+    dbg('Go Live failed: ' + e.message);
+  }
+});
     dbg('Published join for ' + profile.handle);
 
     if (hbTimer) clearInterval(hbTimer);
