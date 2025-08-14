@@ -47,6 +47,7 @@
         <button id="openRoom" disabled>Open as Model</button>
       </div>
       <p class="muted">Going live broadcasts your presence to the public directory (no data stored). Closing the tab ends the session.</p>
+<div id="debug" class="muted" style="margin-top:8px;font-size:.85rem"></div>
     </div>
   </main>
 
@@ -76,42 +77,72 @@
   });
 
   let realtime, dir, roomChan, clientId;
+  const debugEl = document.getElementById('debug');
+  function dbg(msg){ if(!debugEl) return; const p=document.createElement('div'); p.textContent=msg; debugEl.appendChild(p); }
+
   async function startRealtime(){
-    realtime = new Ably.Realtime.Promise({ authUrl:'/api/ably-token' });
-    await realtime.connection.once('connected');
-    clientId = realtime.auth.clientId;
-    dir = realtime.channels.get('directory');
+    try {
+      const basePath = location.pathname.startsWith('/models') ? '/models' : '';
+      const authUrl = basePath + '/api/ably-token';
+      dbg('Connecting to Ably…');
+      realtime = new Ably.Realtime.Promise({ authUrl });
+      await realtime.connection.once('connected');
+      clientId = realtime.auth.clientId;
+      dir = realtime.channels.get('directory');
+      dbg('Connected to Ably. ClientId: ' + (clientId||'n/a'));
+    } catch (e) {
+      alert('Failed to connect to realtime. Check ABLY_API_KEY and /api/ably-token.
+
+' + e.message);
+      dbg('Realtime error: ' + e.message);
+      throw e;
+    }
   }
 
   async function go_live(){
-    if (!profile?.handle) return alert('Save your profile first.');
-    if (!realtime) await startRealtime();
-    statusEl.textContent = 'Live';
-    goLive.disabled = true; endLive.disabled = false; openRoom.disabled = false;
+    try {
+      if (!profile?.handle) return alert('Save your profile first.');
+      if (!realtime) await startRealtime();
+      // Sanity-check token endpoint quickly
+      try {
+        const r = await fetch((location.pathname.startsWith('/models')?'/models':'') + '/api/ably-token', { cache: 'no-store' });
+        if (!r.ok) dbg('Token endpoint HTTP ' + r.status);
+      } catch(e){ dbg('Token fetch failed: '+e.message); }
 
-    // announce join
-    dir.publish('join', { handle: profile.handle, name: profile.name });
+      statusEl.textContent = 'Live';
+      goLive.disabled = true; endLive.disabled = false; openRoom.disabled = false;
 
-    // heartbeat (keeps directory fresh)
-    window._hb = setInterval(()=> dir.publish('join', { handle: profile.handle, name: profile.name }), 20000);
+      await dir.publish('join', { handle: profile.handle, name: profile.name });
+      dbg('Published join for ' + profile.handle);
 
-    // open model room channel (optional, not required here)
-    roomChan = realtime.channels.get('room:'+profile.handle);
-    await roomChan.presence.enter({ model:true, t:Date.now() });
+      window._hb = setInterval(()=> dir.publish('join', { handle: profile.handle, name: profile.name }), 5000);
+
+      roomChan = realtime.channels.get('room:'+profile.handle);
+      try { await roomChan.presence.enter({ model:true, t:Date.now() }); dbg('Entered room presence.'); } catch(e){ dbg('Presence enter failed: '+e.message); }
+    } catch (e) {
+      goLive.disabled = false; endLive.disabled = true; openRoom.disabled = true;
+      dbg('Go Live failed: ' + e.message);
+    }
   }
 
   async function end_live(){
-    statusEl.textContent = 'Offline';
-    goLive.disabled = false; endLive.disabled = true; openRoom.disabled = true;
-    if (window._hb) clearInterval(window._hb);
-    if (dir) dir.publish('leave', { handle: profile.handle });
-    try { await roomChan?.presence.leave(); } catch {}
+    try {
+      statusEl.textContent = 'Offline';
+      goLive.disabled = false; endLive.disabled = true; openRoom.disabled = true;
+      if (window._hb) clearInterval(window._hb);
+      if (dir) await dir.publish('leave', { handle: profile.handle });
+      try { await roomChan?.presence.leave(); } catch {}
+      dbg('Ended live.');
+    } catch (e) {
+      dbg('End live error: ' + e.message);
+    }
   }
 
   goLive.addEventListener('click', go_live);
   endLive.addEventListener('click', end_live);
   openRoom.addEventListener('click', ()=> window.open('https://localgirls.io/room/'+profile.handle, '_blank'));
   window.addEventListener('beforeunload', end_live);
+  window.addEventListener('error', (e)=> dbg('JS error: '+e.message));
 </script>
 </body>
 </html>
