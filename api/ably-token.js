@@ -1,4 +1,3 @@
-// /api/ably-token.js — CommonJS
 const Ably = require('ably/promises');
 module.exports = async (req, res) => {
   try {
