@@ -1,5 +1,5 @@
 const Ably = require('ably/promises');
-module.exports = async (req, res) => {
+module.exports = async (_req, res) => {
   try {
     const apiKey = process.env.ABLY_API_KEY;
     if (!apiKey) return res.status(500).json({ error: 'missing_env', message: 'ABLY_API_KEY not set' });
