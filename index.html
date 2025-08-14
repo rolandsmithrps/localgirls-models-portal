@@ -3,201 +3,52 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Local Girls — Models Portal</title>
+  <title>Local Girls — Models Login</title>
   <link rel="icon" href="data:," />
   <style>
     :root { --bg:#0f0a1f; --card:#1e103b; --accent:#a855f7; --text:#f8f8ff; --muted:#cbd5e1; --border:#3a1b73; }
     *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
     header{background:#4c1d95;padding:12px 16px;color:#fff;display:flex;align-items:center;gap:10px}
     header .badge{font-weight:600;font-size:.85rem;padding:4px 8px;border:1px solid #ffffff33;border-radius:999px;opacity:.9}
-    main{max-width:820px;margin:0 auto;padding:18px}
-    .panel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
-    .muted{color:var(--muted)}
-    label{display:block;margin-bottom:6px}
+    main{max-width:560px;margin:0 auto;padding:24px}
+    .panel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px}
+    label{display:block;margin:6px 0 6px 0}
     input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#150a2b;color:#fff;margin-bottom:12px}
-    button{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:#6d28d9;color:#fff;cursor:pointer}
-    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-    code{background:#0b0717;padding:3px 6px;border-radius:6px}
-    .btns{display:flex;gap:10px;flex-wrap:wrap}
+    button{padding:10px 14px;border-radius:10px;border:1px solid #5b21b6;background:#6d28d9;color:#fff;cursor:pointer;width:100%}
+    .muted{color:var(--muted)}
   </style>
-  <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
 </head>
 <body>
   <header>
     <b>LOCAL GIRLS — Models</b>
-    <span class="badge">v7b</span>
+    <span class="badge">v8</span>
   </header>
   <main>
     <div class="panel">
       <h2>Login</h2>
       <p class="muted">Welcome, LocalGirls Model. Please login to begin streaming.</p>
-      <div class="row">
-        <div style="flex:1">
-          <label>Display name</label>
-          <input id="name" placeholder="e.g., Taylored2U" />
-        </div>
-      </div>
-      <button id="save">Continue</button>
-    </div>
-
-    <div class="panel" style="margin-top:12px;display:none" id="livePanel">
-      <h3>Status: <span id="status">Offline</span></h3>
-      <p>Room URL for members: <code id="memberUrl"></code></p>
-      <div class="btns">
-        <button id="goLive">Go Live</button>
-        <button id="endLive" disabled>End Session</button>
-      </div>
-      <div id="debug" class="muted" style="margin-top:10px;font-size:.9rem"></div>
+      <label>Login</label>
+      <input id="login" placeholder="e.g., Taylor" autocomplete="username"/>
+      <label>Password</label>
+      <input id="password" type="password" placeholder="Enter any password" autocomplete="current-password"/>
+      <button id="continue">Continue</button>
+      <p class="muted" style="margin-top:8px">For filming only — any password is accepted. No data is stored.</p>
     </div>
   </main>
 
 <script>
-/** Helpers **/
-const debugEl = document.getElementById('debug');
-function dbg(m){ if(debugEl){ const p=document.createElement('div'); p.textContent=m; debugEl.appendChild(p);} }
-function slugify(s){ return (s||'').toLowerCase().trim().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,''); }
-
-/** Elements **/
-const nameEl = document.getElementById('name');
-const saveBtn = document.getElementById('save');
-const livePanel = document.getElementById('livePanel');
-const statusEl = document.getElementById('status');
-const memberUrlEl = document.getElementById('memberUrl');
-const goLive = document.getElementById('goLive');
-const endLive = document.getElementById('endLive');
-
-/** State **/
-let profile = JSON.parse(localStorage.getItem('lg_model')||'null') || null;
-let realtime, dir, roomChan, hbTimer;
-
-if (profile?.name) {
-  nameEl.value = profile.name;
-  // compute handle again to be safe
-  profile.handle = slugify(profile.name);
-  const memberOrigin = location.origin.replace('models.', '');
-  memberUrlEl.textContent = memberOrigin + '/room/' + profile.handle;
-  livePanel.style.display = 'block';
-}
-
-/** Save (Continue) **/
-saveBtn.addEventListener('click', (e)=>{
-  e.preventDefault();
-  const name = (nameEl.value||'').trim();
-  if (!name) { alert('Enter a display name.'); nameEl.focus(); return; }
-  const handle = slugify(name);
-  profile = { name, handle };
-  localStorage.setItem('lg_model', JSON.stringify(profile));
-  const memberOrigin = location.origin.replace('models.', '');
-  memberUrlEl.textContent = memberOrigin + '/room/' + handle;
-  livePanel.style.display = 'block';
-  statusEl.textContent = 'Offline';
-  dbg('Saved profile: ' + name + ' (' + handle + ')');
-  livePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-});
-
-/** Realtime **/
-async function startRealtime(){
-  if (realtime) return;
-  try {
-    const basePath = location.pathname.startsWith('/models') ? '/models' : '';
-    const authUrl = basePath + '/api/ably-token';
-    dbg('Connecting to Ably… (' + authUrl + ')');
-    // Fire a quick probe to surface 404/500 fast
-    try {
-      const probe = await fetch(authUrl, { method:'GET', cache:'no-store' });
-      if (!probe.ok) dbg('Token endpoint status: ' + probe.status + ' (should be 200)');
-    } catch (e) {
-      dbg('Token endpoint fetch error: ' + e.message);
-    }
-    realtime = new Ably.Realtime.Promise({ authUrl });
-    const timeout = new Promise((_,rej)=> setTimeout(()=> rej(new Error('Ably connect timeout')), 4000));
-    await Promise.race([ realtime.connection.once('connected'), timeout ]);
-    dir = realtime.channels.get('directory');
-    dbg('Connected to Ably.');
-  } catch (e) {
-    dbg('Realtime error: ' + e.message);
-    throw e;
-  }
-});
-    await realtime.connection.once('connected');
-    dir = realtime.channels.get('directory');
-    dbg('Connected to Ably.');
-  } catch (e) {
-    alert('Failed to connect to realtime. Check ABLY_API_KEY and /api/ably-token.\n' + e.message);
-    dbg('Realtime error: ' + e.message);
-    throw e;
-  }
-}
-
-/** Go Live: broadcast + open room tab **/
-async function go_live(){
-  try {
-    if (!profile?.name) return alert('Save your profile first.');
-
-    // Open the room tab immediately so filming doesn't wait on network
-    const memberOrigin = location.origin.replace('models.', '');
-    const url = memberOrigin + '/room/' + profile.handle;
-    const opened = window.open(url, '_blank');
-    dbg('Opened model room: ' + url + (opened ? '' : ' (popup blocked)'));
-
-    // Try to connect realtime (non-blocking)
-    try {
-      await startRealtime();
-      statusEl.textContent = 'Live';
-      goLive.disabled = true; endLive.disabled = false;
-
-      await dir.publish('join', { handle: profile.handle, name: profile.name });
-      dbg('Published join for ' + profile.handle);
-
-      hbTimer && clearInterval(hbTimer);
-      hbTimer = setInterval(()=> dir.publish('join', { handle: profile.handle, name: profile.name }), 5000);
-
-      roomChan = realtime.channels.get('room:'+profile.handle);
-      try { await roomChan.presence.enter({ model:true, t:Date.now() }); dbg('Entered room presence.'); } catch(e){ dbg('Presence enter failed: '+e.message); }
-    } catch (e) {
-      dbg('Go Live (realtime) failed: ' + e.message + ' — room tab still opened for filming.');
-      // Keep buttons enabled to retry
-      goLive.disabled = false; endLive.disabled = true;
-    }
-  } catch (e) {
-    goLive.disabled = false; endLive.disabled = true;
-    alert('Go Live failed: ' + e.message);
-    dbg('Go Live failed: ' + e.message);
-  }
-});
-    dbg('Published join for ' + profile.handle);
-
-    if (hbTimer) clearInterval(hbTimer);
-    hbTimer = setInterval(()=> dir.publish('join', { handle: profile.handle, name: profile.name }), 5000);
-
-    roomChan = realtime.channels.get('room:'+profile.handle);
-    try { await roomChan.presence.enter({ model:true, t:Date.now() }); dbg('Entered room presence.'); } catch(e){ dbg('Presence enter failed: '+e.message); }
-
-    const memberOrigin = location.origin.replace('models.', '');
-    const url = memberOrigin + '/room/' + profile.handle;
-    window.open(url, '_blank');
-    dbg('Opened model room: ' + url);
-  } catch(e){
-    goLive.disabled = false; endLive.disabled = true;
-    dbg('Go Live failed: ' + e.message);
-    alert('Go Live failed: ' + e.message);
-  }
-}
-
-async function end_live(){
-  try{
-    statusEl.textContent = 'Offline';
-    goLive.disabled = false; endLive.disabled = true;
-    hbTimer && clearInterval(hbTimer);
-    try { await dir?.publish('leave', { handle: profile?.handle, name: profile?.name }); } catch{}
-    try { await roomChan?.presence.leave(); } catch{}
-    dbg('Ended live.');
-  }catch(e){ dbg('End live error: '+e.message); }
-}
-
-goLive.addEventListener('click', (e)=>{ e.preventDefault(); go_live(); });
-endLive.addEventListener('click', (e)=>{ e.preventDefault(); end_live(); });
-window.addEventListener('beforeunload', end_live);
+  const btn = document.getElementById('continue');
+  btn.addEventListener('click', ()=>{
+    const login = (document.getElementById('login').value || '').trim();
+    const password = (document.getElementById('password').value || '').trim();
+    if (!login) { alert('Please enter a login name.'); return; }
+    // Accept any password for filming; still require something to be typed for realism
+    if (!password) { alert('Please enter a password.'); return; }
+    // Persist minimal profile for dashboard
+    localStorage.setItem('lg_model', JSON.stringify({ name: login }));
+    // Navigate to dashboard
+    location.href = '/dashboard.html';
+  });
 </script>
 </body>
 </html>
