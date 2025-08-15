@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Zoom Config (v10)</title>
+<link rel="icon" href="data:,">
+<style>body{font-family:system-ui;margin:20px}label{display:block;margin:.6rem 0 .2rem}input{width:420px;max-width:100%;padding:.5rem}button{margin-top:.8rem;padding:.5rem .8rem}</style>
+<h1>Zoom Config <small style="opacity:.7">v10</small></h1>
+<p>Edit <code>/zoom-config.js</code> in your repo. This page only displays current values.</p>
+<script src="/zoom-config.js"></script>
+<div>
+  <label>SDK Key (Client ID)</label>
+  <input id="k" readonly>
+  <label>Meeting Number</label>
+  <input id="m" readonly>
+  <label>Passcode</label>
+  <input id="p" readonly>
+</div>
+<script>
+const c = window.ZOOM_CFG||{}; k.value=c.SDK_KEY||''; m.value=c.MEETING_NUMBER||''; p.value=c.PASSCODE||'';
+</script>

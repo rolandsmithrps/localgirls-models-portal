@@ -1,15 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Model Portal — Host Zoom (v10)</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root { --bg:#0f0a1f; --text:#f8f8ff; }
+    body{margin:0;background:#0f0a1f;color:#f8f8ff;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto}
+    header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#4c1d95}
+    .pill{border:1px solid #ffffff33;border-radius:999px;padding:4px 8px}
+    #zmmtg-root{position:relative;height:calc(100dvh - 56px);width:100%}
+    .err{display:none;margin:12px;padding:10px;border:1px solid #ef4444;border-radius:8px;background:#7f1d1d;color:#fee2e2}
+  </style>
+  <script src="https://source.zoom.us/3.2.0/lib/vendor/react.min.js"></script>
+  <script src="https://source.zoom.us/3.2.0/lib/vendor/react-dom.min.js"></script>
+  <script src="https://source.zoom.us/3.2.0/zoom-meeting-3.2.0.min.js"></script>
+  <script src="/zoom-config.js"></script>
+</head>
+<body>
+  <header>
+    <strong>MODEL PORTAL — Host Zoom <span class="pill">v10</span></strong>
+    <a href="/dashboard.html" style="color:#fff">Back</a>
+  </header>
+  <div id="err" class="err"></div>
+  <div id="zmmtg-root"></div>
 
-<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Model Portal — Host Zoom (v10)</title><link rel="icon" href="data:,"/>
-<style>:root{--bg:#0f0a1f;--text:#f8f8ff}body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif}header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#4c1d95}.pill{border:1px solid #ffffff33;border-radius:999px;padding:4px 8px}#zmmtg-root{position:relative;height:calc(100dvh - 56px);width:100%}</style>
-<script src="https://source.zoom.us/3.2.0/lib/vendor/react.min.js"></script>
-<script src="https://source.zoom.us/3.2.0/lib/vendor/react-dom.min.js"></script>
-<script src="https://source.zoom.us/3.2.0/zoom-meeting-3.2.0.min.js"></script>
-<script src="/zoom-config.js"></script></head>
-<body><header><strong>MODEL PORTAL — Host Zoom <span class="pill">v10</span></strong><a href="/" style="color:#fff">Back</a></header>
-<div id="zmmtg-root"></div>
 <script>
-async function getSignature(mn, role){const r=await fetch('/api/zoom-signature?mn='+encodeURIComponent(mn)+'&role='+role);const j=await r.json();return j.signature;}
-async function hostZoom(){const cfg=window.ZOOM_CFG||{};const s=await getSignature(cfg.MEETING_NUMBER,1);ZoomMtg.setZoomJSLib('https://source.zoom.us/3.2.0/lib','/av');ZoomMtg.preLoadWasm();ZoomMtg.prepareJssdk();ZoomMtg.init({leaveUrl:'/',success:()=>{ZoomMtg.join({sdkKey:cfg.SDK_KEY,signature:s,meetingNumber:cfg.MEETING_NUMBER,userName:'Host',passWord:cfg.PASSCODE||''});}});}
+async function getSignature(mn, role){
+  const r = await fetch('/api/zoom-signature?mn=' + encodeURIComponent(mn) + '&role=' + role);
+  if(!r.ok) throw new Error('Signature endpoint error');
+  const j = await r.json();
+  if(!j.signature) throw new Error('No signature returned');
+  return j.signature;
+}
+async function hostZoom(){
+  const cfg = window.ZOOM_CFG || {};
+  const SDK_KEY = cfg.SDK_KEY;
+  const MEETING_NUMBER = cfg.MEETING_NUMBER;
+  const PASSCODE = cfg.PASSCODE;
+  const errEl = document.getElementById('err');
+  if(!SDK_KEY || !MEETING_NUMBER){
+    errEl.style.display='block';
+    errEl.textContent = 'Missing SDK_KEY or MEETING_NUMBER in /zoom-config.js';
+    return;
+  }
+  try{
+    ZoomMtg.setZoomJSLib('https://source.zoom.us/3.2.0/lib','/av');
+    ZoomMtg.preLoadWasm();
+    ZoomMtg.prepareJssdk();
+    const signature = await getSignature(MEETING_NUMBER, 1);
+    ZoomMtg.init({
+      leaveUrl: '/dashboard.html',
+      success: () => {
+        ZoomMtg.join({ sdkKey: SDK_KEY, signature, meetingNumber: MEETING_NUMBER, userName: 'Host', passWord: PASSCODE || '' });
+      }
+    });
+  }catch(e){
+    errEl.style.display='block';
+    errEl.textContent = 'Join failed: ' + e.message;
+  }
+}
 hostZoom();
-</script></body></html>
+</script>
+</body>
+</html>

@@ -1,5 +1,3 @@
-
-/** Optional: only needed if hosting via portal domain. */
 const jwt = require('jsonwebtoken');
 const SDK_KEY = process.env.ZOOM_SDK_KEY;
 const SDK_SECRET = process.env.ZOOM_SDK_SECRET;

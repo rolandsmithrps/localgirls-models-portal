@@ -1,6 +1,5 @@
-
 {
-  "name": "localgirls-portal-v10",
+  "name": "localgirls-model-portal-v10",
   "private": true,
   "dependencies": {
     "jsonwebtoken": "^9.0.2"

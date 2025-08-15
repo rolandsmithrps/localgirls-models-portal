@@ -1,12 +1,19 @@
+# Model Portal v10 — Host with Zoom (Meeting SDK)
 
-# Model Portal v10 — Zoom Host (keeps your UI)
-**Option A: Host in Zoom app (recommended)**
-- No env vars needed on portal. Keep your UI. Members join via members site.
+## What you get
+- `dashboard.html` — visible **v10** badge + **Open as Host** button.
+- `zoom-host.html` — hosts the Zoom meeting in the browser.
+- `zoom-config.js` — set your Client ID (SDK Key), Meeting Number, Passcode.
+- `api/zoom-signature.js` — serverless signature endpoint (required by Zoom SDK).
+- `package.json` — `jsonwebtoken` dependency.
 
-**Option B: Host in browser on the portal**
-1) On Vercel for `models.localgirls.io`, set env vars: `ZOOM_SDK_KEY` (Client ID), `ZOOM_SDK_SECRET` (Client Secret).
-2) Add these files to your portal repo: `zoom-host.html`, `zoom-config.js`, `api/zoom-signature.js`, `go-live-zoom-inject.js`.
-3) On your portal page (dashboard/room), add before </body>:
-   <script src="/go-live-zoom-inject.js" defer></script>
-4) Edit `/zoom-config.js` with SDK key, meeting number, passcode.
-5) Deploy. Click **Go Live (Zoom) — v10** to host via SDK.
+## Setup
+1) In Zoom (General App with Meeting SDK enabled), copy **Client ID** and **Client Secret**.
+2) Vercel → `models.localgirls.io` → Environment Variables:
+   - `ZOOM_SDK_KEY` = Client ID
+   - `ZOOM_SDK_SECRET` = Client Secret
+3) Edit `/zoom-config.js` with:
+   - `SDK_KEY` = Client ID
+   - `MEETING_NUMBER` = recurring meeting ID (digits only)
+   - `PASSCODE` = meeting passcode
+4) Deploy. Open `/dashboard.html` and click **Open as Host**.
