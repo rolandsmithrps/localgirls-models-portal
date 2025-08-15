@@ -1,0 +1,15 @@
+
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Model Portal — Host Zoom (v10)</title><link rel="icon" href="data:,"/>
+<style>:root{--bg:#0f0a1f;--text:#f8f8ff}body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif}header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#4c1d95}.pill{border:1px solid #ffffff33;border-radius:999px;padding:4px 8px}#zmmtg-root{position:relative;height:calc(100dvh - 56px);width:100%}</style>
+<script src="https://source.zoom.us/3.2.0/lib/vendor/react.min.js"></script>
+<script src="https://source.zoom.us/3.2.0/lib/vendor/react-dom.min.js"></script>
+<script src="https://source.zoom.us/3.2.0/zoom-meeting-3.2.0.min.js"></script>
+<script src="/zoom-config.js"></script></head>
+<body><header><strong>MODEL PORTAL — Host Zoom <span class="pill">v10</span></strong><a href="/" style="color:#fff">Back</a></header>
+<div id="zmmtg-root"></div>
+<script>
+async function getSignature(mn, role){const r=await fetch('/api/zoom-signature?mn='+encodeURIComponent(mn)+'&role='+role);const j=await r.json();return j.signature;}
+async function hostZoom(){const cfg=window.ZOOM_CFG||{};const s=await getSignature(cfg.MEETING_NUMBER,1);ZoomMtg.setZoomJSLib('https://source.zoom.us/3.2.0/lib','/av');ZoomMtg.preLoadWasm();ZoomMtg.prepareJssdk();ZoomMtg.init({leaveUrl:'/',success:()=>{ZoomMtg.join({sdkKey:cfg.SDK_KEY,signature:s,meetingNumber:cfg.MEETING_NUMBER,userName:'Host',passWord:cfg.PASSCODE||''});}});}
+hostZoom();
+</script></body></html>
