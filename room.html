@@ -20,7 +20,17 @@
     .warn{border-color:#a16207;color:#fde68a}
     .err{border-color:#9f1239;color:#fecaca}
   </style>
-  <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+  <script src="https://cdn.ably.com/lib/ably.min-1.js">
+window.addEventListener('beforeunload', async () => {
+  try { await chan?.presence?.leave(); } catch {}
+  try {
+    const directory = realtime && realtime.channels.get('directory');
+    const handle = (roomSlug || '').toLowerCase();
+    if (directory) directory.publish('leave', { handle });
+  } catch(e) {}
+});
+
+</script>
 </head>
 <body>
 <header>
@@ -111,6 +121,11 @@ async function initPeer(servers){
   realtime = new Ably.Realtime.Promise({ authUrl: '/api/ably-token' });
   await realtime.connection.once('connected');
   chan = realtime.channels.get('room:' + roomSlug);
+  // Also announce to the public directory channel so the members site can flip tiles immediately
+  const directory = realtime.channels.get('directory');
+  const handle = (roomSlug || '').toLowerCase();
+  try { directory.publish('join', { handle }); } catch(e) {}
+
 
   try { await chan.presence.enter({ role: isHost ? 'host' : 'guest' }); } catch(e){ log('presence error ' + e.message); }
 
@@ -192,6 +207,16 @@ document.getElementById('btnHang').onclick = async () => {
 };
 
 window.addEventListener('beforeunload', async () => { try { await chan?.presence?.leave(); } catch {} });
+
+window.addEventListener('beforeunload', async () => {
+  try { await chan?.presence?.leave(); } catch {}
+  try {
+    const directory = realtime && realtime.channels.get('directory');
+    const handle = (roomSlug || '').toLowerCase();
+    if (directory) directory.publish('leave', { handle });
+  } catch(e) {}
+});
+
 </script>
 </body>
 </html>
