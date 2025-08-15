@@ -17,6 +17,14 @@
   <script src="https://source.zoom.us/3.2.0/lib/vendor/react-dom.min.js"></script>
   <script src="https://source.zoom.us/3.2.0/zoom-meeting-3.2.0.min.js"></script>
   <script src="/zoom-config.js"></script>
+
+<script>
+function whenZoomReady(cb){
+  if (window.ZoomMtg && typeof ZoomMtg.init === 'function') return cb();
+  setTimeout(() => whenZoomReady(cb), 50);
+}
+</script>
+
 </head>
 <body>
   <header>
@@ -61,7 +69,7 @@ async function hostZoom(){
     errEl.textContent = 'Join failed: ' + e.message;
   }
 }
-hostZoom();
+whenZoomReady(hostZoom);
 </script>
 </body>
 </html>
