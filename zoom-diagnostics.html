@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zoom Diagnostics (v10)</title>
+<link rel="stylesheet" href="https://source.zoom.us/3.2.0/css/bootstrap.css">
+<link rel="stylesheet" href="https://source.zoom.us/3.2.0/css/react-select.css">
+<style>
+ body{font-family:system-ui;margin:20px;background:#0f0a1f;color:#f8f8ff}
+ pre{background:#0b0720;border:1px solid #3a1b73;padding:10px;border-radius:8px;white-space:pre-wrap}
+ section{margin-bottom:16px}
+ .ok{color:#22c55e} .bad{color:#ef4444}
+ .btn{background:#6d28d9;color:#fff;border:1px solid #5b21b6;border-radius:8px;padding:8px 12px;cursor:pointer}
+</style>
+<script>
+function log(id, msg, ok) {
+  const el = document.getElementById(id);
+  const p = document.createElement('div');
+  p.className = ok ? 'ok' : 'bad';
+  p.textContent = (ok ? '✔ ' : '✖ ') + msg;
+  el.appendChild(p);
+}
+window.addEventListener('error', e => {
+  const out = document.getElementById('errors'); 
+  const d = document.createElement('div'); d.className='bad'; 
+  d.textContent = 'Window error: ' + (e.message || e.error); out.appendChild(d);
+});
+window.addEventListener('unhandledrejection', e => {
+  const out = document.getElementById('errors'); 
+  const d = document.createElement('div'); d.className='bad'; 
+  d.textContent = 'Unhandled rejection: ' + (e.reason && e.reason.message ? e.reason.message : JSON.stringify(e.reason)); out.appendChild(d);
+});
+</script>
+</head>
+<body>
+<h1>Zoom Diagnostics <small class="ok">v10</small></h1>
+
+<section>
+<h3>Environment</h3>
+<div id="env"></div>
+<script>
+(function(){
+  const env = document.getElementById('env');
+  const https = location.protocol === 'https:';
+  const topLevel = (window.top === window.self);
+  env.innerHTML = '<pre>' + JSON.stringify({
+    href: location.href,
+    protocol: location.protocol,
+    topLevel,
+    userAgent: navigator.userAgent
+  }, null, 2) + '</pre>';
+  log('env', 'HTTPS ' + (https ? 'yes' : 'no'), https);
+  log('env', 'Top window ' + (topLevel ? 'yes' : 'no'), topLevel);
+})();
+</script>
+</section>
+
+<section>
+<h3>Load Zoom SDK</h3>
+<div id="sdk"></div>
+<script src="https://source.zoom.us/3.2.0/lib/vendor/react.min.js"></script>
+<script src="https://source.zoom.us/3.2.0/lib/vendor/react-dom.min.js"></script>
+<script src="https://source.zoom.us/3.2.0/zoom-meeting-3.2.0.min.js"></script>
+<script>
+(function(){
+  const ok = !!(window.ZoomMtg && typeof ZoomMtg.init === 'function');
+  log('sdk', 'ZoomMtg available: ' + ok, ok);
+  if (ok) {
+    try { log('sdk', 'ZoomMtg version: ' + (ZoomMtg.getJSSDKVersion && ZoomMtg.getJSSDKVersion()), true); } catch (e) {}
+  } else {
+    log('sdk', 'Check CSP and that source.zoom.us is allowed', false);
+  }
+})();
+</script>
+</section>
+
+<section>
+<h3>Config</h3>
+<div id="cfg"></div>
+<script src="/zoom-config.js"></script>
+<script>
+(function(){
+  const c = window.ZOOM_CFG || {};
+  const ok = !!(c.SDK_KEY && c.MEETING_NUMBER);
+  document.getElementById('cfg').innerHTML = '<pre>'+JSON.stringify(c, null, 2)+'</pre>';
+  log('cfg', 'SDK_KEY present', !!c.SDK_KEY);
+  log('cfg', 'MEETING_NUMBER present', !!c.MEETING_NUMBER);
+  log('cfg', 'PASSCODE present (ok if empty)', c.PASSCODE !== undefined);
+  log('cfg', 'ZAK present (optional)', c.ZAK !== undefined);
+})();
+</script>
+</section>
+
+<section>
+<h3>Signature endpoint</h3>
+<div id="sig"></div>
+<button class="btn" onclick="testSig(0)">Test attendee signature (role=0)</button>
+<button class="btn" onclick="testSig(1)">Test host signature (role=1)</button>
+<script>
+async function testSig(role){
+  const c = window.ZOOM_CFG || {};
+  const box = document.getElementById('sig');
+  box.textContent = 'Loading...';
+  try{
+    const u = '/api/zoom-signature?mn='+encodeURIComponent(c.MEETING_NUMBER||'')+'&role='+role;
+    const r = await fetch(u);
+    const j = await r.json();
+    box.innerHTML = '<pre>'+JSON.stringify({ok:r.ok, status:r.status, body:j}, null, 2)+'</pre>';
+    log('sig', 'Signature ok (role='+role+')', !!j.signature);
+  }catch(e){
+    box.innerHTML = '<pre>'+e.message+'</pre>';
+    log('sig', 'Signature failed', false);
+  }
+}
+</script>
+</section>
+
+<section>
+<h3>Errors</h3>
+<div id="errors"></div>
+</section>
+</body>
+</html>

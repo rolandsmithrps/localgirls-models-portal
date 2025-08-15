@@ -27,11 +27,22 @@ function whenZoomReady(cb){
 }
 </script>
 
+
+<script>
+window.addEventListener('error', e => { 
+  const el = document.getElementById('err'); if (!el) return;
+  el.style.display='block'; el.textContent = 'Window error: ' + (e.message || e.error);
+});
+window.addEventListener('unhandledrejection', e => { 
+  const el = document.getElementById('err'); if (!el) return;
+  el.style.display='block'; el.textContent = 'Unhandled: ' + (e.reason && e.reason.message ? e.reason.message : JSON.stringify(e.reason));
+});
+</script>
 </head>
 <body>
   <header>
     <strong>MODEL PORTAL — Host Zoom <span class="pill">v10</span></strong>
-    <a href="/dashboard.html" style="color:#fff">Back</a>
+    <a href="/dashboard.html" style="color:#fff">Back</a> <a href="/zoom-diagnostics.html" style="color:#fff;margin-left:8px">Diagnostics</a>
   </header>
   <div id="err" class="err"></div>
   <div id="zmmtg-root"></div>
