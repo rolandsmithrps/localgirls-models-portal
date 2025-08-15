@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Model Portal — Host Zoom (v10)</title>
+<link rel="stylesheet" href="https://source.zoom.us/3.2.0/css/bootstrap.css">
+<link rel="stylesheet" href="https://source.zoom.us/3.2.0/css/react-select.css">
   <link rel="icon" href="data:," />
   <style>
     :root { --bg:#0f0a1f; --text:#f8f8ff; }
@@ -33,6 +35,7 @@ function whenZoomReady(cb){
   </header>
   <div id="err" class="err"></div>
   <div id="zmmtg-root"></div>
+<p style="padding:12px;color:#cbd5e1">Tip: To truly start as host in the browser, add <code>ZAK</code> to <code>/zoom-config.js</code>. Without it, this page joins as an attendee so you never see a blank screen.</p>
 
 <script>
 async function getSignature(mn, role){
@@ -43,6 +46,8 @@ async function getSignature(mn, role){
   return j.signature;
 }
 async function hostZoom(){
+  const errEl = document.getElementById('err');
+  function showErr(msg){ errEl.style.display='block'; errEl.textContent = msg; console.error('[Zoom host]', msg); }
   const cfg = window.ZOOM_CFG || {};
   const SDK_KEY = cfg.SDK_KEY;
   const MEETING_NUMBER = cfg.MEETING_NUMBER;
