@@ -1,24 +1,8 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Model Portal — Host Zoom (v10)</title>
-<link rel="stylesheet" href="https://source.zoom.us/3.2.0/css/bootstrap.css">
+<!doctype html><html><head><meta charset="utf-8"><title>Host v11</title><link rel="stylesheet" href="https://source.zoom.us/3.2.0/css/bootstrap.css">
 <link rel="stylesheet" href="https://source.zoom.us/3.2.0/css/react-select.css">
-  <link rel="icon" href="data:," />
-  <style>
-    :root { --bg:#0f0a1f; --text:#f8f8ff; }
-    body{margin:0;background:#0f0a1f;color:#f8f8ff;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto}
-    header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#4c1d95}
-    .pill{border:1px solid #ffffff33;border-radius:999px;padding:4px 8px}
-    #zmmtg-root{position:relative;height:calc(100dvh - 56px);width:100%}
-    .err{display:none;margin:12px;padding:10px;border:1px solid #ef4444;border-radius:8px;background:#7f1d1d;color:#fee2e2}
-  </style>
-  <script src="https://source.zoom.us/3.2.0/lib/vendor/react.min.js"></script>
-  <script src="https://source.zoom.us/3.2.0/lib/vendor/react-dom.min.js"></script>
-  <script src="https://source.zoom.us/3.2.0/zoom-meeting-3.2.0.min.js"></script>
-  <script src="/zoom-config.js"></script>
+<script src="https://source.zoom.us/3.2.0/lib/vendor/react.min.js"></script>
+<script src="https://source.zoom.us/3.2.0/lib/vendor/react-dom.min.js"></script>
+<script src="https://source.zoom.us/3.2.0/zoom-meeting-3.2.0.min.js"></script>
 
 <script>
 function whenZoomReady(cb){
@@ -27,65 +11,10 @@ function whenZoomReady(cb){
 }
 </script>
 
-
+</head><body>
+<header>Host v11</header><div id="err"></div><div id="zmmtg-root"></div>
+<script src="/zoom-config.js"></script>
 <script>
-window.addEventListener('error', e => { 
-  const el = document.getElementById('err'); if (!el) return;
-  el.style.display='block'; el.textContent = 'Window error: ' + (e.message || e.error);
-});
-window.addEventListener('unhandledrejection', e => { 
-  const el = document.getElementById('err'); if (!el) return;
-  el.style.display='block'; el.textContent = 'Unhandled: ' + (e.reason && e.reason.message ? e.reason.message : JSON.stringify(e.reason));
-});
-</script>
-</head>
-<body>
-  <header>
-    <strong>MODEL PORTAL — Host Zoom <span class="pill">v10</span></strong>
-    <a href="/dashboard.html" style="color:#fff">Back</a> <a href="/zoom-diagnostics.html" style="color:#fff;margin-left:8px">Diagnostics</a>
-  </header>
-  <div id="err" class="err"></div>
-  <div id="zmmtg-root"></div>
-<p style="padding:12px;color:#cbd5e1">Tip: To truly start as host in the browser, add <code>ZAK</code> to <code>/zoom-config.js</code>. Without it, this page joins as an attendee so you never see a blank screen.</p>
-
-<script>
-async function getSignature(mn, role){
-  const r = await fetch('/api/zoom-signature?mn=' + encodeURIComponent(mn) + '&role=' + role);
-  if(!r.ok) throw new Error('Signature endpoint error');
-  const j = await r.json();
-  if(!j.signature) throw new Error('No signature returned');
-  return j.signature;
-}
-async function hostZoom(){
-  const errEl = document.getElementById('err');
-  function showErr(msg){ errEl.style.display='block'; errEl.textContent = msg; console.error('[Zoom host]', msg); }
-  const cfg = window.ZOOM_CFG || {};
-  const SDK_KEY = cfg.SDK_KEY;
-  const MEETING_NUMBER = cfg.MEETING_NUMBER;
-  const PASSCODE = cfg.PASSCODE;
-  const errEl = document.getElementById('err');
-  if(!SDK_KEY || !MEETING_NUMBER){
-    errEl.style.display='block';
-    errEl.textContent = 'Missing SDK_KEY or MEETING_NUMBER in /zoom-config.js';
-    return;
-  }
-  try{
-    ZoomMtg.setZoomJSLib('https://source.zoom.us/3.2.0/lib','/av');
-    ZoomMtg.preLoadWasm();
-    ZoomMtg.prepareJssdk();
-    const signature = await getSignature(MEETING_NUMBER, 1);
-    ZoomMtg.init({
-      leaveUrl: '/dashboard.html',
-      success: () => {
-        ZoomMtg.join({ sdkKey: SDK_KEY, signature, meetingNumber: MEETING_NUMBER, userName: 'Host', passWord: PASSCODE || '' });
-      }
-    });
-  }catch(e){
-    errEl.style.display='block';
-    errEl.textContent = 'Join failed: ' + e.message;
-  }
-}
-whenZoomReady(hostZoom);
-</script>
-</body>
-</html>
+async function getSignature(mn, role){const r=await fetch('/api/zoom-signature?mn='+encodeURIComponent(mn)+'&role='+role);const j=await r.json();return j.signature;}
+async function hostZoom(){const c=window.ZOOM_CFG||{};try{ZoomMtg.setZoomJSLib('https://source.zoom.us/3.2.0/lib','/av');ZoomMtg.preLoadWasm();ZoomMtg.prepareJssdk();const sig=await getSignature(c.MEETING_NUMBER,1);ZoomMtg.init({leaveUrl:'/home.html',success:()=>{ZoomMtg.join({sdkKey:c.SDK_KEY,signature:sig,meetingNumber:c.MEETING_NUMBER,userName:'Host',passWord:c.PASSCODE||''});}});}catch(e){document.getElementById('err').textContent=e.message;}}
+</script></body></html>
